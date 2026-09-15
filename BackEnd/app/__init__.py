@@ -1,0 +1,1 @@
+"""AppHealth teaching project."""
