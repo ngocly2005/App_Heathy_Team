@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AppHealth</string>
+    <string name="brand_mark">A</string>
+    <string name="prototype_status">PROTOTYPE NAVIGATION</string>
+    <string name="lesson_number">02</string>
+    <string name="nav_home">Trang chủ</string>
+    <string name="nav_diary">Nhật ký</string>
+    <string name="nav_profile">Hồ sơ</string>
+    <string name="diary_placeholder">Danh sách bữa ăn sẽ được triển khai ở bài sau.</string>
+    <string name="profile_placeholder">Thông tin cá nhân và mục tiêu sẽ được triển khai ở bài sau.</string>
+    <string name="home_eyebrow">DINH DƯỠNG THÔNG MINH</string>
+    <string name="home_title">Hiểu bữa ăn của bạn, từng ngày một.</string>
+    <string name="home_subtitle">Chụp một món ăn, kiểm tra ước tính dinh dưỡng và chủ động xác nhận trước khi lưu.</string>
+    <string name="today_summary">Tổng quan hôm nay</string>
+    <string name="calories_consumed">Đã nạp</string>
+    <string name="calories_value">0</string>
+    <string name="calories_unit">kcal</string>
+    <string name="calories_goal">Mục tiêu 2.000 kcal</string>
+    <string name="calories_remaining">Còn lại 2.000 kcal</string>
+    <string name="protein_label">Đạm</string>
+    <string name="carbs_label">Tinh bột</string>
+    <string name="fat_label">Chất béo</string>
+    <string name="empty_macro_value">0 g</string>
+    <string name="scan_action">Xem luồng quét món ăn</string>
+    <string name="scan_action_support">Bản demo tương tác; camera và AI sẽ được kết nối ở DATE 06.</string>
+    <string name="scan_explanation">Ở bản hoàn chỉnh, bạn sẽ chụp hoặc chọn ảnh, xem khoảng calories và chỉnh khẩu phần trước khi lưu vào nhật ký.</string>
+    <string name="scan_state_collapsed">Phần giải thích đang đóng</string>
+    <string name="scan_state_expanded">Phần giải thích đang mở</string>
+    <string name="roadmap_title">Sắp có trong lộ trình</string>
+    <string name="scan_feature_code">AI</string>
+    <string name="scan_feature_title">Nhận diện món ăn</string>
+    <string name="scan_feature_description">Ước tính theo khoảng, luôn cho phép sửa món và khẩu phần.</string>
+    <string name="diary_feature_code">NK</string>
+    <string name="diary_feature_title">Nhật ký bữa ăn</string>
+    <string name="diary_feature_description">Theo dõi calories và các chất đa lượng trong ngày.</string>
+    <string name="progress_feature_code">KG</string>
+    <string name="progress_feature_title">Tiến độ mục tiêu</string>
+    <string name="progress_feature_description">Xem xu hướng cân nặng theo tuần và theo tháng.</string>
+    <string name="wellness_disclaimer">Kết quả dinh dưỡng là ước tính hỗ trợ wellness, không thay thế tư vấn y khoa.</string>
+</resources>
