@@ -80,12 +80,15 @@ fun MenuScreen(
 
     var mealToAddTo by remember { mutableStateOf<String?>(null) }
 
-    // Xác định thứ của ngày hôm nay (VD: "T2", "T3"...) để làm mặc định
+    // Xác định ngày hôm nay và thứ hiện tại để làm mặc định
     val today = remember { LocalDate.now() }
     val todayString = getDayOfWeekString(today)
     var currentDayForAdd by remember { mutableStateOf(todayString) }
 
     val plannedFoodsMap by viewModel.plannedFoodMap.collectAsState()
+
+    // [ĐÃ SỬA] Lấy thêm danh sách recentFoods từ ViewModel
+    val recentFoods by viewModel.recentFoods.collectAsState()
 
     // Kiểm tra xem ngày đang chọn có phải là ngày trong quá khứ so với hôm nay không
     val isPastDay = isSelectedDayInPast(currentDayForAdd, today)
@@ -93,9 +96,16 @@ fun MenuScreen(
     if (mealToAddTo != null) {
         FoodSelectContent(
             foodList = FoodDatabase.allFoods,
+            customFoods = viewModel.customFoods,
+            recentFoods = recentFoods, // [ĐÃ SỬA] Truyền tham số bị thiếu vào đây
+            onSaveCustomFood = { newFood ->
+                viewModel.addCustomFood(newFood)
+            },
             onBack = { mealToAddTo = null },
             onFoodClick = { food ->
-                val key = "$currentDayForAdd-$mealToAddTo"
+                val actualDateStr = getActualDateFromDayString(currentDayForAdd, today).toString()
+                val key = "$actualDateStr-$mealToAddTo"
+
                 viewModel.addFoodToPlan(key, food)
                 mealToAddTo = null
             }
@@ -125,9 +135,9 @@ fun MenuScreen(
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp)
                 )
 
-                // Thanh chọn thứ trong tuần đơn giản, trực quan
                 WeeklyPlanHeader(
                     selectedDay = currentDayForAdd,
+                    today = today,
                     onDaySelected = { currentDayForAdd = it },
                     plannedFoodsMap = plannedFoodsMap,
                     targetCalories = targetCalories,
@@ -166,9 +176,25 @@ fun isSelectedDayInPast(selectedDayStr: String, today: LocalDate): Boolean {
     return selectedIndex < todayIndex
 }
 
+// Hàm hỗ trợ quy đổi từ chữ "T2", "T3"... về ngày tháng năm cụ thể (LocalDate) trong tuần hiện tại
+fun getActualDateFromDayString(dayStr: String, today: LocalDate): LocalDate {
+    val daysOfWeek = listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN")
+    val todayStr = getDayOfWeekString(today)
+
+    val todayIndex = daysOfWeek.indexOf(todayStr)
+    val targetIndex = daysOfWeek.indexOf(dayStr)
+
+    // Tính khoảng cách ngày giữa thứ được chọn và hôm nay
+    val daysDifference = targetIndex - todayIndex
+
+    // Cộng hoặc trừ số ngày tương ứng để ra đúng LocalDate của thứ đó trong tuần này
+    return today.plusDays(daysDifference.toLong())
+}
+
 @Composable
 fun WeeklyPlanHeader(
     selectedDay: String,
+    today: LocalDate,
     onDaySelected: (String) -> Unit,
     plannedFoodsMap: Map<String, List<FoodItem>>,
     targetCalories: Int,
@@ -178,8 +204,11 @@ fun WeeklyPlanHeader(
     val daysOfWeek = listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN")
     val meals = listOf("Bữa sáng", "Bữa trưa", "Bữa tối", "Bữa phụ")
 
+    // Tính chuỗi ngày thực tế cho Tab thứ đang được chọn (VD: 2026-10-12)
+    val actualDateStr = getActualDateFromDayString(selectedDay, today).toString()
+
     val totalConsumedCalories = meals.sumOf { mealName ->
-        val key = "$selectedDay-$mealName"
+        val key = "$actualDateStr-$mealName"
         val foods = plannedFoodsMap[key] ?: emptyList()
         foods.sumOf { it.calories }
     }
@@ -187,7 +216,6 @@ fun WeeklyPlanHeader(
     val isOverLimit = totalConsumedCalories > targetCalories
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Thanh cuộn ngang chỉ hiển thị các thứ trong tuần (T2 -> CN)
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
@@ -241,7 +269,7 @@ fun WeeklyPlanHeader(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(meals) { mealName ->
-                val key = "$selectedDay-$mealName"
+                val key = "$actualDateStr-$mealName"
                 val foodsInMeal = plannedFoodsMap[key] ?: emptyList()
 
                 MealPlanCard(
@@ -285,7 +313,6 @@ fun MealPlanCard(
                     )
                 }
 
-                // Chỉ hiển thị nút dấu cộng (+) nếu KHÔNG phải là thứ trong quá khứ
                 if (!isPastDay) {
                     Box(
                         modifier = Modifier

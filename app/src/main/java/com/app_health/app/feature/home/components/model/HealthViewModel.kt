@@ -1,6 +1,7 @@
 package com.app_health.app.feature.home.components.model
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateListOf
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.AndroidViewModel
@@ -151,7 +152,7 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         val currentRecent = _recentFoods.value.toMutableList()
         currentRecent.removeAll { it.name == food.name }
         currentRecent.add(0, food)
-        _recentFoods.value = if (currentRecent.size > 2) currentRecent.take(2) else currentRecent
+        _recentFoods.value = if (currentRecent.size > 30) currentRecent.take(30) else currentRecent
 
         viewModelScope.launch {
             streakManager.checkAndUpdateStreak()
@@ -201,5 +202,12 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         _loggedActivityMap.value = emptyMap()
         _loggedWaterMap.value = emptyMap()
         _recentFoods.value = emptyList()
+    }
+    private val _customFoods = mutableStateListOf<FoodItem>()
+    val customFoods: List<FoodItem> get() = _customFoods
+
+    // Hàm thêm món ăn mới vào danh sách custom
+    fun addCustomFood(food: FoodItem) {
+        _customFoods.add(0, food) // Thêm lên đầu danh sách
     }
 }

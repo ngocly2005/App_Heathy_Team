@@ -100,9 +100,17 @@ fun DiaryScreen(
     var selectedTimeSlotForAdd by remember { mutableStateOf<String?>(null) }
     val loggedFoodMap by viewModel.loggedFoodMap.collectAsState()
 
+    // [ĐÃ SỬA] Lấy thêm danh sách recentFoods từ ViewModel
+    val recentFoods by viewModel.recentFoods.collectAsState()
+
     if (selectedTimeSlotForAdd != null) {
         FoodSelectContent(
             foodList = FoodDatabase.allFoods,
+            customFoods = viewModel.customFoods,
+            recentFoods = recentFoods,           // [ĐÃ SỬA] Truyền tham số bị thiếu vào đây
+            onSaveCustomFood = { newFood ->
+                viewModel.addCustomFood(newFood)
+            },
             onBack = { selectedTimeSlotForAdd = null },
             onFoodClick = { food ->
                 val dailyKey = "${selectedDate}_${selectedTimeSlotForAdd!!}"

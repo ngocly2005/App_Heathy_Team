@@ -28,10 +28,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.app_health.app.feature.home.components.Diary.CreateCustomFoodScreen
 import com.app_health.app.feature.home.model.FoodItem
 import com.app_health.app.feature.home.model.FoodDatabase
 import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
+import java.time.LocalDate
 
 // 1. Stateful Composable
 @Composable
@@ -40,13 +42,20 @@ fun FoodSelectScreen(
     timeSlot: String,
     onBack: () -> Unit
 ) {
+    val recentFoods by viewModel.recentFoods.collectAsState()
+
     FoodSelectContent(
-        foodList = FoodDatabase.allFoods, // Lấy dữ liệu từ FoodDatabase
+        foodList = FoodDatabase.allFoods,
+        customFoods = viewModel.customFoods,
+        recentFoods = recentFoods,
         onFoodClick = { food ->
-            val today = java.time.LocalDate.now() // Hoặc lấy selectedDate nếu bạn truyền xuống
+            val today = LocalDate.now()
             val dailyKey = "${today}_$timeSlot"
             viewModel.addFoodToTimeSlot(dailyKey, food)
             onBack()
+        },
+        onSaveCustomFood = { newFood ->
+            viewModel.addCustomFood(newFood)
         },
         onBack = onBack
     )
@@ -57,34 +66,53 @@ fun FoodSelectScreen(
 @Composable
 fun FoodSelectContent(
     foodList: List<FoodItem>,
+    customFoods: List<FoodItem>,
+    recentFoods: List<FoodItem>,
+    onSaveCustomFood: (FoodItem) -> Unit,
     onFoodClick: (FoodItem) -> Unit,
     onBack: () -> Unit
 ) {
-    // Biến trạng thái quản lý việc hiển thị màn hình chi tiết
+    // Biến trạng thái quản lý việc hiển thị màn hình
     var selectedFood by remember { mutableStateOf<FoodItem?>(null) }
+    var showCreateFoodScreen by remember { mutableStateOf(false) }
 
-    if (selectedFood != null) {
-        // Nếu có món ăn được chọn, hiển thị FoodDetailScreen
+    // [QUAN TRỌNG] Gộp danh sách: Món Gần Đây + Món Tự Tạo + Tất cả CSDL.
+    // Lệnh distinctBy { it.name } giúp loại bỏ những món bị trùng lặp, đảm bảo
+    // món nào vừa tương tác sẽ ngoi lên đầu, các món mặc định khác xếp phía sau.
+    val combinedList = remember(recentFoods, customFoods, foodList) {
+        (recentFoods + customFoods + foodList).distinctBy { it.name }
+    }
+
+    // XỬ LÝ ĐIỀU HƯỚNG CÁC MÀN HÌNH CHỒNG LÊN NHAU
+    if (showCreateFoodScreen) {
+        CreateCustomFoodScreen(
+            onBack = { showCreateFoodScreen = false },
+            onSaveClick = { newFood ->
+                onSaveCustomFood(newFood)
+                showCreateFoodScreen = false
+            }
+        )
+    } else if (selectedFood != null) {
         FoodDetailScreen(
             food = selectedFood!!,
-            onBack = { selectedFood = null }, // Nhấn nút back trên màn chi tiết thì quay lại danh sách
+            onBack = { selectedFood = null },
             onAdd = { adjustedFood ->
-                onFoodClick(adjustedFood) // Thêm món ăn đã điều chỉnh gram và thoát
+                onFoodClick(adjustedFood)
                 selectedFood = null
             }
         )
     } else {
-        // Nếu không có món nào được chọn, hiển thị màn hình danh sách
+        // GIAO DIỆN CHÍNH: THANH TÌM KIẾM VÀ CÁC TAB
         var searchQuery by remember { mutableStateOf("") }
         var selectedTab by remember { mutableStateOf(0) }
         val tabs = listOf("Gần đây", "Tạo bởi tôi", "Yêu thích")
 
-        // Lọc danh sách món ăn dựa trên từ khóa tìm kiếm
-        val filteredFoods = remember(searchQuery, foodList) {
+        // Lọc danh sách dựa trên danh sách ĐÃ GỘP (combinedList)
+        val filteredFoods = remember(searchQuery, combinedList) {
             if (searchQuery.isBlank()) {
-                foodList
+                combinedList
             } else {
-                foodList.filter { food ->
+                combinedList.filter { food ->
                     food.name.contains(searchQuery, ignoreCase = true)
                 }
             }
@@ -178,37 +206,136 @@ fun FoodSelectContent(
             },
             containerColor = AppBackground
         ) { paddingValues ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item { Spacer(modifier = Modifier.height(8.dp)) }
 
-                if (filteredFoods.isEmpty()) {
-                    item {
+            // XỬ LÝ HIỂN THỊ NỘI DUNG DỰA TRÊN TAB ĐANG CHỌN
+            if (searchQuery.isNotBlank()) {
+                // ĐANG TÌM KIẾM: Hiển thị kết quả tìm kiếm chung
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
+
+                    if (filteredFoods.isEmpty()) {
+                        item {
+                            Text(
+                                text = "Không tìm thấy món ăn nào",
+                                color = TextSecondary,
+                                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        items(filteredFoods) { food ->
+                            FoodItemCard(
+                                food = food,
+                                onItemClick = { selectedFood = food },
+                                onAddClick = { onFoodClick(food) }
+                            )
+                        }
+                    }
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+
+            } else if (selectedTab == 1) {
+                // TAB "TẠO BỞI TÔI"
+                if (customFoods.isEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Text(
-                            text = "Không tìm thấy món ăn nào",
+                            text = "Bạn chưa tạo món ăn cá nhân nào.",
                             color = TextSecondary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 20.dp),
+                            fontSize = 16.sp,
                             textAlign = TextAlign.Center
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = { showCreateFoodScreen = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Add")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Tạo món ăn mới", fontWeight = FontWeight.Bold)
+                        }
                     }
                 } else {
-                    items(filteredFoods) { food ->
-                        FoodItemCard(
-                            food = food,
-                            onItemClick = { selectedFood = food }, // Nhấn vào item để mở trang chi tiết
-                            onAddClick = { onFoodClick(food) }     // Nhấn nút + để thêm nhanh mặc định 100g
-                        )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { showCreateFoodScreen = true },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppPrimary)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Add")
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Tạo thêm món ăn khác", fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        items(customFoods) { food ->
+                            FoodItemCard(
+                                food = food,
+                                onItemClick = { selectedFood = food },
+                                onAddClick = { onFoodClick(food) }
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
                 }
 
-                item { Spacer(modifier = Modifier.height(16.dp)) }
+            } else {
+                // TAB "GẦN ĐÂY" VÀ "YÊU THÍCH"
+                // Luôn hiển thị danh sách đầy đủ (có Gần Đây/Tạo Mới trên cùng, Default ở dưới)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
+
+                    if (filteredFoods.isEmpty()) {
+                        item {
+                            Text(
+                                text = "Không tìm thấy món ăn nào",
+                                color = TextSecondary,
+                                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        items(filteredFoods) { food ->
+                            FoodItemCard(
+                                food = food,
+                                onItemClick = { selectedFood = food },
+                                onAddClick = { onFoodClick(food) }
+                            )
+                        }
+                    }
+
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                }
             }
         }
     }
@@ -224,7 +351,7 @@ fun FoodItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 2.dp, shape = RoundedCornerShape(16.dp))
-            .clickable { onItemClick() }, // Click vào card để xem chi tiết
+            .clickable { onItemClick() },
         color = AppSurface,
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -287,7 +414,7 @@ fun FoodItemCard(
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(AppPrimaryLight)
-                    .clickable { onAddClick() }, // Giữ nguyên sự kiện click thêm nhanh cho icon +
+                    .clickable { onAddClick() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -304,9 +431,11 @@ fun FoodItemCard(
 @Preview(showBackground = true)
 @Composable
 fun FoodSelectScreenPreview() {
-    // Truyền trực tiếp dữ liệu từ Database vào Preview để kiểm tra giao diện
     FoodSelectContent(
-        foodList = FoodDatabase.allFoods.take(5), // Chỉ lấy 5 món đầu tiên để render Preview cho nhẹ
+        foodList = FoodDatabase.allFoods.take(5),
+        customFoods = emptyList(),
+        recentFoods = emptyList(),
+        onSaveCustomFood = {},
         onFoodClick = {},
         onBack = {}
     )
