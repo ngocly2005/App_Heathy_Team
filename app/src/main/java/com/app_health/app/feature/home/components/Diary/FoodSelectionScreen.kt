@@ -1,5 +1,6 @@
 package com.app_health.app.feature.home.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,7 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
@@ -33,12 +35,12 @@ import com.app_health.app.feature.home.model.FoodItem
 import com.app_health.app.feature.home.model.FoodDatabase
 import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
-import java.time.LocalDate
 
 // 1. Stateful Composable
 @Composable
 fun FoodSelectScreen(
     viewModel: HealthViewModel,
+    selectedDate: String, // ĐÃ THÊM: Truyền ngày đang chọn vào để lưu đúng ngày
     timeSlot: String,
     onBack: () -> Unit
 ) {
@@ -48,9 +50,11 @@ fun FoodSelectScreen(
         foodList = FoodDatabase.allFoods,
         customFoods = viewModel.customFoods,
         recentFoods = recentFoods,
+        favoriteFoods = viewModel.favoriteFoods,
+        headerTitle = "$selectedDate • $timeSlot", // ĐÃ THÊM: Gắn tiêu đề linh động
+        onToggleFavorite = { viewModel.toggleFavorite(it) },
         onFoodClick = { food ->
-            val today = LocalDate.now()
-            val dailyKey = "${today}_$timeSlot"
+            val dailyKey = "${selectedDate}_$timeSlot" // Sửa lỗi lưu nhầm ngày
             viewModel.addFoodToTimeSlot(dailyKey, food)
             onBack()
         },
@@ -68,22 +72,20 @@ fun FoodSelectContent(
     foodList: List<FoodItem>,
     customFoods: List<FoodItem>,
     recentFoods: List<FoodItem>,
+    favoriteFoods: List<FoodItem> = emptyList(),
+    headerTitle: String = "Hôm nay", // ĐÃ THÊM: Tham số cấu hình tiêu đề
+    onToggleFavorite: (FoodItem) -> Unit = {},
     onSaveCustomFood: (FoodItem) -> Unit,
     onFoodClick: (FoodItem) -> Unit,
     onBack: () -> Unit
 ) {
-    // Biến trạng thái quản lý việc hiển thị màn hình
     var selectedFood by remember { mutableStateOf<FoodItem?>(null) }
     var showCreateFoodScreen by remember { mutableStateOf(false) }
 
-    // [QUAN TRỌNG] Gộp danh sách: Món Gần Đây + Món Tự Tạo + Tất cả CSDL.
-    // Lệnh distinctBy { it.name } giúp loại bỏ những món bị trùng lặp, đảm bảo
-    // món nào vừa tương tác sẽ ngoi lên đầu, các món mặc định khác xếp phía sau.
     val combinedList = remember(recentFoods, customFoods, foodList) {
         (recentFoods + customFoods + foodList).distinctBy { it.name }
     }
 
-    // XỬ LÝ ĐIỀU HƯỚNG CÁC MÀN HÌNH CHỒNG LÊN NHAU
     if (showCreateFoodScreen) {
         CreateCustomFoodScreen(
             onBack = { showCreateFoodScreen = false },
@@ -102,12 +104,15 @@ fun FoodSelectContent(
             }
         )
     } else {
-        // GIAO DIỆN CHÍNH: THANH TÌM KIẾM VÀ CÁC TAB
+        // Lắng nghe sự kiện vuốt để Back (của hệ thống)
+        BackHandler(enabled = true) {
+            onBack()
+        }
+
         var searchQuery by remember { mutableStateOf("") }
         var selectedTab by remember { mutableStateOf(0) }
         val tabs = listOf("Gần đây", "Tạo bởi tôi", "Yêu thích")
 
-        // Lọc danh sách dựa trên danh sách ĐÃ GỘP (combinedList)
         val filteredFoods = remember(searchQuery, combinedList) {
             if (searchQuery.isBlank()) {
                 combinedList
@@ -120,7 +125,8 @@ fun FoodSelectContent(
 
         Scaffold(
             topBar = {
-                Column(modifier = Modifier.background(AppBackground)) {
+                // Thêm statusBarsPadding() để đẩy khối TopBar xịt xuống dưới thanh pin/sóng
+                Column(modifier = Modifier.background(AppBackground).statusBarsPadding()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -128,12 +134,15 @@ fun FoodSelectContent(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Nút Back bên trái
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                         }
+
+                        // Chữ ở giữa
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Hôm nay • 12:00",
+                                text = headerTitle, // ĐÃ SỬA: Hiển thị biến linh động thay vì chữ cố định
                                 color = TextPrimary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
@@ -144,9 +153,9 @@ fun FoodSelectContent(
                                 tint = TextPrimary
                             )
                         }
-                        IconButton(onClick = { /* Thông tin */ }) {
-                            Icon(Icons.Default.Info, contentDescription = "Info", tint = TextPrimary)
-                        }
+
+                        // Box tàng hình để cân bằng với nút Back
+                        Box(modifier = Modifier.size(48.dp))
                     }
 
                     Row(
@@ -207,31 +216,20 @@ fun FoodSelectContent(
             containerColor = AppBackground
         ) { paddingValues ->
 
-            // XỬ LÝ HIỂN THỊ NỘI DUNG DỰA TRÊN TAB ĐANG CHỌN
             if (searchQuery.isNotBlank()) {
-                // ĐANG TÌM KIẾM: Hiển thị kết quả tìm kiếm chung
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item { Spacer(modifier = Modifier.height(8.dp)) }
-
                     if (filteredFoods.isEmpty()) {
-                        item {
-                            Text(
-                                text = "Không tìm thấy món ăn nào",
-                                color = TextSecondary,
-                                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        item { Text("Không tìm thấy món ăn nào", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(top = 20.dp), textAlign = TextAlign.Center) }
                     } else {
                         items(filteredFoods) { food ->
                             FoodItemCard(
                                 food = food,
+                                isFavorite = favoriteFoods.contains(food),
+                                onFavoriteClick = { onToggleFavorite(food) },
                                 onItemClick = { selectedFood = food },
                                 onAddClick = { onFoodClick(food) }
                             )
@@ -239,24 +237,14 @@ fun FoodSelectContent(
                     }
                     item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
-
             } else if (selectedTab == 1) {
-                // TAB "TẠO BỞI TÔI"
                 if (customFoods.isEmpty()) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            text = "Bạn chưa tạo món ăn cá nhân nào.",
-                            color = TextSecondary,
-                            fontSize = 16.sp,
-                            textAlign = TextAlign.Center
-                        )
+                        Text("Bạn chưa tạo món ăn cá nhân nào.", color = TextSecondary, fontSize = 16.sp, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = { showCreateFoodScreen = true },
@@ -271,10 +259,7 @@ fun FoodSelectContent(
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
-                            .padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         item {
@@ -295,6 +280,8 @@ fun FoodSelectContent(
                         items(customFoods) { food ->
                             FoodItemCard(
                                 food = food,
+                                isFavorite = favoriteFoods.contains(food),
+                                onFavoriteClick = { onToggleFavorite(food) },
                                 onItemClick = { selectedFood = food },
                                 onAddClick = { onFoodClick(food) }
                             )
@@ -302,38 +289,46 @@ fun FoodSelectContent(
                         item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
                 }
-
-            } else {
-                // TAB "GẦN ĐÂY" VÀ "YÊU THÍCH"
-                // Luôn hiển thị danh sách đầy đủ (có Gần Đây/Tạo Mới trên cùng, Default ở dưới)
+            } else if (selectedTab == 2) {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item { Spacer(modifier = Modifier.height(8.dp)) }
-
-                    if (filteredFoods.isEmpty()) {
-                        item {
-                            Text(
-                                text = "Không tìm thấy món ăn nào",
-                                color = TextSecondary,
-                                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                    if (favoriteFoods.isEmpty()) {
+                        item { Text("Bạn chưa có món ăn yêu thích nào.", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(top = 20.dp), textAlign = TextAlign.Center) }
                     } else {
-                        items(filteredFoods) { food ->
+                        items(favoriteFoods) { food ->
                             FoodItemCard(
                                 food = food,
+                                isFavorite = true,
+                                onFavoriteClick = { onToggleFavorite(food) },
                                 onItemClick = { selectedFood = food },
                                 onAddClick = { onFoodClick(food) }
                             )
                         }
                     }
-
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
+                    if (filteredFoods.isEmpty()) {
+                        item { Text("Không tìm thấy món ăn nào", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(top = 20.dp), textAlign = TextAlign.Center) }
+                    } else {
+                        items(filteredFoods) { food ->
+                            FoodItemCard(
+                                food = food,
+                                isFavorite = favoriteFoods.contains(food),
+                                onFavoriteClick = { onToggleFavorite(food) },
+                                onItemClick = { selectedFood = food },
+                                onAddClick = { onFoodClick(food) }
+                            )
+                        }
+                    }
                     item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
             }
@@ -344,6 +339,8 @@ fun FoodSelectContent(
 @Composable
 fun FoodItemCard(
     food: FoodItem,
+    isFavorite: Boolean,
+    onFavoriteClick: () -> Unit,
     onItemClick: () -> Unit,
     onAddClick: () -> Unit
 ) {
@@ -413,6 +410,24 @@ fun FoodItemCard(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
+                    .background(Color.Transparent)
+                    .clickable { onFavoriteClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    tint = if (isFavorite) Color.Red else Color.LightGray,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
                     .background(AppPrimaryLight)
                     .clickable { onAddClick() },
                 contentAlignment = Alignment.Center
@@ -435,6 +450,9 @@ fun FoodSelectScreenPreview() {
         foodList = FoodDatabase.allFoods.take(5),
         customFoods = emptyList(),
         recentFoods = emptyList(),
+        favoriteFoods = emptyList(),
+        headerTitle = "Ngày 14/10 • Bữa sáng",
+        onToggleFavorite = {},
         onSaveCustomFood = {},
         onFoodClick = {},
         onBack = {}

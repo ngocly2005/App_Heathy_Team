@@ -87,7 +87,6 @@ fun MenuScreen(
 
     val plannedFoodsMap by viewModel.plannedFoodMap.collectAsState()
 
-    // [ĐÃ SỬA] Lấy thêm danh sách recentFoods từ ViewModel
     val recentFoods by viewModel.recentFoods.collectAsState()
 
     // Kiểm tra xem ngày đang chọn có phải là ngày trong quá khứ so với hôm nay không
@@ -97,7 +96,9 @@ fun MenuScreen(
         FoodSelectContent(
             foodList = FoodDatabase.allFoods,
             customFoods = viewModel.customFoods,
-            recentFoods = recentFoods, // [ĐÃ SỬA] Truyền tham số bị thiếu vào đây
+            recentFoods = recentFoods,
+            favoriteFoods = viewModel.favoriteFoods, // ĐÃ THÊM: Truyền danh sách yêu thích
+            onToggleFavorite = { viewModel.toggleFavorite(it) }, // ĐÃ THÊM: Xử lý sự kiện bấm tim
             onSaveCustomFood = { newFood ->
                 viewModel.addCustomFood(newFood)
             },

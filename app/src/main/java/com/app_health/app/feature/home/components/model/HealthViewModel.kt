@@ -1,21 +1,13 @@
 package com.app_health.app.feature.home.components.model
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.runtime.mutableStateListOf
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import com.app_health.app.feature.home.components.Home.StreakManager
-import com.app_health.app.feature.home.components.LoginLogout.SharedDataStoreProvider
 import com.app_health.app.feature.home.model.FoodItem
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 data class ActivityRecord(
     val name: String,
@@ -25,22 +17,35 @@ data class ActivityRecord(
 )
 
 class HealthViewModel(application: Application) : AndroidViewModel(application) {
-    private val context = application.applicationContext
-    private val gson = Gson()
-    private val streakManager = StreakManager(application)
 
-    // Khóa DataStore để lưu JSON
-    private val KEY_LOGGED_FOODS = stringPreferencesKey("logged_foods")
-    private val KEY_PLANNED_FOODS = stringPreferencesKey("planned_foods")
-    private val KEY_LOGGED_ACTIVITIES = stringPreferencesKey("logged_activities")
-    private val KEY_LOGGED_WATER = stringPreferencesKey("logged_water")
+    private val prefs = application.getSharedPreferences("HealthApp_Prefs", Context.MODE_PRIVATE)
+    private var currentUserEmail = ""
 
-    // Trạng thái Email hiện tại đang được load
-    private var currentUserEmail: String? = null
+    // ==========================================
+    // 1. DANH SÁCH MÓN ĂN YÊU THÍCH VÀ TỰ TẠO
+    // ==========================================
+    private val _favoriteFoods = mutableStateListOf<FoodItem>()
+    val favoriteFoods: List<FoodItem> get() = _favoriteFoods
 
-    // StateFlows
+    private val _customFoods = mutableStateListOf<FoodItem>()
+    val customFoods: List<FoodItem> get() = _customFoods
+
+    fun toggleFavorite(food: FoodItem) {
+        if (_favoriteFoods.contains(food)) _favoriteFoods.remove(food)
+        else _favoriteFoods.add(food)
+        if (currentUserEmail.isNotBlank()) saveList("$currentUserEmail-favorites", _favoriteFoods)
+    }
+
+    fun addCustomFood(food: FoodItem) {
+        _customFoods.add(food)
+        if (currentUserEmail.isNotBlank()) saveList("$currentUserEmail-customs", _customFoods)
+    }
+
+    // ==========================================
+    // 2. CÁC BIẾN QUẢN LÝ DỮ LIỆU CHÍNH TỪNG NGÀY
+    // ==========================================
     private val _recentFoods = MutableStateFlow<List<FoodItem>>(emptyList())
-    val recentFoods = _recentFoods.asStateFlow()
+    val recentFoods: StateFlow<List<FoodItem>> = _recentFoods.asStateFlow()
 
     private val _loggedFoodMap = MutableStateFlow<Map<String, List<FoodItem>>>(emptyMap())
     val loggedFoodMap: StateFlow<Map<String, List<FoodItem>>> = _loggedFoodMap.asStateFlow()
@@ -54,160 +59,200 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     private val _loggedWaterMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val loggedWaterMap: StateFlow<Map<String, Int>> = _loggedWaterMap.asStateFlow()
 
-    // --- HÀM TẢI DỮ LIỆU KHI ĐĂNG NHẬP ---
-    fun loadDataForUser(email: String?) {
-        if (email.isNullOrBlank()) {
-            clearAllSessionData()
-            return
-        }
-
+    // ==========================================
+    // 3. HÀM KHÔI PHỤC VÀ XÓA DỮ LIỆU KHI ĐĂNG NHẬP
+    // ==========================================
+    fun loadDataForUser(email: String) {
         currentUserEmail = email
 
-        viewModelScope.launch {
-            val dataStore = SharedDataStoreProvider.get(context, email)
-            val preferences = dataStore.data.first() // Lấy snapshot hiện tại của DataStore
+        _favoriteFoods.clear()
+        _favoriteFoods.addAll(loadList("$email-favorites"))
 
-            // Load Food
-            val foodJson = preferences[KEY_LOGGED_FOODS]
-            val initialFoodMap = if (foodJson != null) {
-                val type = object : TypeToken<Map<String, List<FoodItem>>>() {}.type
-                gson.fromJson<Map<String, List<FoodItem>>>(foodJson, type)
-            } else emptyMap()
-            _loggedFoodMap.value = initialFoodMap
+        _customFoods.clear()
+        _customFoods.addAll(loadList("$email-customs"))
 
-            // Tính Recent Food
-            _recentFoods.value = initialFoodMap.values.flatten().distinct().take(2)
-
-            // Load Plan
-            val planJson = preferences[KEY_PLANNED_FOODS]
-            _plannedFoodMap.value = if (planJson != null) {
-                val type = object : TypeToken<Map<String, List<FoodItem>>>() {}.type
-                gson.fromJson(planJson, type)
-            } else emptyMap()
-
-            // Load Activity
-            val activityJson = preferences[KEY_LOGGED_ACTIVITIES]
-            _loggedActivityMap.value = if (activityJson != null) {
-                val type = object : TypeToken<Map<String, List<ActivityRecord>>>() {}.type
-                gson.fromJson(activityJson, type)
-            } else emptyMap()
-
-            // Load Water
-            val waterJson = preferences[KEY_LOGGED_WATER]
-            _loggedWaterMap.value = if (waterJson != null) {
-                val type = object : TypeToken<Map<String, Int>>() {}.type
-                gson.fromJson(waterJson, type)
-            } else emptyMap()
-        }
+        // ĐÃ BỔ SUNG: Khôi phục lại toàn bộ dữ liệu ăn uống, nước, tập luyện từ bộ nhớ
+        _loggedFoodMap.value = loadFoodMap("$email-diary")
+        _plannedFoodMap.value = loadFoodMap("$email-plan")
+        _loggedActivityMap.value = loadActivityMap("$email-activity")
+        _loggedWaterMap.value = loadWaterMap("$email-water")
     }
 
-    // --- CÁC HÀM LƯU VÀO DATASTORE THEO EMAIL ---
-    private fun saveFoodData(map: Map<String, List<FoodItem>>) {
-        viewModelScope.launch {
-            val dataStore = SharedDataStoreProvider.get(context, currentUserEmail)
-            dataStore.edit { it[KEY_LOGGED_FOODS] = gson.toJson(map) }
-        }
+    fun clearAllSessionData() {
+        currentUserEmail = ""
+        _favoriteFoods.clear()
+        _customFoods.clear()
+        _recentFoods.value = emptyList()
+        _loggedFoodMap.value = emptyMap()
+        _plannedFoodMap.value = emptyMap()
+        _loggedActivityMap.value = emptyMap()
+        _loggedWaterMap.value = emptyMap()
     }
 
-    private fun savePlanData(map: Map<String, List<FoodItem>>) {
-        viewModelScope.launch {
-            val dataStore = SharedDataStoreProvider.get(context, currentUserEmail)
-            dataStore.edit { it[KEY_PLANNED_FOODS] = gson.toJson(map) }
-        }
+    // ==========================================
+    // 4. CÁC HÀM XỬ LÝ DỮ LIỆU (ĐÃ THÊM LỆNH LƯU)
+    // ==========================================
+    fun addFoodToTimeSlot(dailyKey: String, food: FoodItem) {
+        val currentMap = _loggedFoodMap.value.toMutableMap()
+        val currentList = currentMap[dailyKey]?.toMutableList() ?: mutableListOf()
+        currentList.add(food)
+        currentMap[dailyKey] = currentList
+        _loggedFoodMap.value = currentMap
+
+        updateRecentFoods(food)
+        if (currentUserEmail.isNotBlank()) saveFoodMap("$currentUserEmail-diary", currentMap) // LƯU VÀO MÁY
     }
 
-    private fun saveActivityData(map: Map<String, List<ActivityRecord>>) {
-        viewModelScope.launch {
-            val dataStore = SharedDataStoreProvider.get(context, currentUserEmail)
-            dataStore.edit { it[KEY_LOGGED_ACTIVITIES] = gson.toJson(map) }
-        }
+    fun removeFoodFromTimeSlot(dailyKey: String, food: FoodItem) {
+        val currentMap = _loggedFoodMap.value.toMutableMap()
+        val currentList = currentMap[dailyKey]?.toMutableList() ?: return
+        currentList.remove(food)
+        if (currentList.isEmpty()) currentMap.remove(dailyKey) else currentMap[dailyKey] = currentList
+        _loggedFoodMap.value = currentMap
+
+        if (currentUserEmail.isNotBlank()) saveFoodMap("$currentUserEmail-diary", currentMap) // LƯU VÀO MÁY
     }
 
-    private fun saveWaterData(map: Map<String, Int>) {
-        viewModelScope.launch {
-            val dataStore = SharedDataStoreProvider.get(context, currentUserEmail)
-            dataStore.edit { it[KEY_LOGGED_WATER] = gson.toJson(map) }
-        }
-    }
-
-    // --- CÁC HÀM CẬP NHẬT NHẬT KÝ ---
     fun addFoodToPlan(key: String, food: FoodItem) {
         val currentMap = _plannedFoodMap.value.toMutableMap()
         val currentList = currentMap[key]?.toMutableList() ?: mutableListOf()
         currentList.add(food)
         currentMap[key] = currentList
         _plannedFoodMap.value = currentMap
-        savePlanData(currentMap)
+
+        updateRecentFoods(food)
+        if (currentUserEmail.isNotBlank()) saveFoodMap("$currentUserEmail-plan", currentMap) // LƯU VÀO MÁY
     }
 
-    fun addFoodToTimeSlot(timeKey: String, food: FoodItem) {
-        val currentMap = _loggedFoodMap.value.toMutableMap()
-        val currentList = currentMap[timeKey]?.toMutableList() ?: mutableListOf()
-        currentList.add(food)
-        currentMap[timeKey] = currentList
-        _loggedFoodMap.value = currentMap
+    fun addActivityToDate(date: String, record: ActivityRecord) {
+        val currentMap = _loggedActivityMap.value.toMutableMap()
+        val currentList = currentMap[date]?.toMutableList() ?: mutableListOf()
+        currentList.add(record)
+        currentMap[date] = currentList
+        _loggedActivityMap.value = currentMap
 
-        saveFoodData(currentMap)
+        if (currentUserEmail.isNotBlank()) saveActivityMap("$currentUserEmail-activity", currentMap) // LƯU VÀO MÁY
+    }
 
-        val currentRecent = _recentFoods.value.toMutableList()
-        currentRecent.removeAll { it.name == food.name }
-        currentRecent.add(0, food)
-        _recentFoods.value = if (currentRecent.size > 30) currentRecent.take(30) else currentRecent
+    fun updateWaterForDate(date: String, waterMl: Int) {
+        val currentMap = _loggedWaterMap.value.toMutableMap()
+        currentMap[date] = waterMl
+        _loggedWaterMap.value = currentMap
 
-        viewModelScope.launch {
-            streakManager.checkAndUpdateStreak()
+        if (currentUserEmail.isNotBlank()) saveWaterMap("$currentUserEmail-water", currentMap) // LƯU VÀO MÁY
+    }
+
+    private fun updateRecentFoods(food: FoodItem) {
+        val currentList = _recentFoods.value.toMutableList()
+        currentList.removeAll { it.name == food.name }
+        currentList.add(0, food)
+        if (currentList.size > 20) currentList.removeAt(currentList.lastIndex)
+        _recentFoods.value = currentList
+    }
+
+    // ==========================================
+    // 5. CÔNG CỤ LƯU / ĐỌC FILE BỘ NHỚ
+    // ==========================================
+
+    // Lưu/Đọc List thông thường
+    private fun saveList(key: String, list: List<FoodItem>) {
+        val stringData = list.joinToString(separator = "||") {
+            "${it.name}|${it.calories}|${it.protein}|${it.carbs}|${it.fat}"
+        }
+        prefs.edit().putString(key, stringData).apply()
+    }
+
+    private fun loadList(key: String): List<FoodItem> {
+        val stringData = prefs.getString(key, "") ?: ""
+        if (stringData.isEmpty()) return emptyList()
+
+        return stringData.split("||").mapNotNull { itemStr ->
+            val parts = itemStr.split("|")
+            if (parts.size >= 5) {
+                FoodItem(parts[0], parts[1].toIntOrNull() ?: 0, parts[2].toIntOrNull() ?: 0, parts[3].toIntOrNull() ?: 0, parts[4].toIntOrNull() ?: 0)
+            } else null
         }
     }
 
-    fun removeFoodFromTimeSlot(timeKey: String, food: FoodItem) {
-        val currentMap = _loggedFoodMap.value.toMutableMap()
-        val currentList = currentMap[timeKey]?.toMutableList() ?: return
-
-        if (currentList.remove(food)) {
-            currentMap[timeKey] = currentList
-            _loggedFoodMap.value = currentMap
-            saveFoodData(currentMap)
-
-            val currentRecent = _recentFoods.value.toMutableList()
-            if (currentRecent.remove(food)) {
-                _recentFoods.value = currentRecent
+    // ĐÃ BỔ SUNG: Lưu/Đọc Bản đồ (Map) Nhật ký & Thực đơn
+    private fun saveFoodMap(prefKey: String, map: Map<String, List<FoodItem>>) {
+        val sb = java.lang.StringBuilder()
+        for ((key, list) in map) {
+            for (food in list) {
+                sb.append("$key|${food.name}|${food.calories}|${food.protein}|${food.carbs}|${food.fat}||")
             }
         }
+        prefs.edit().putString(prefKey, sb.toString()).apply()
     }
 
-    fun addActivityToDate(dateKey: String, activity: ActivityRecord) {
-        val currentMap = _loggedActivityMap.value.toMutableMap()
-        val currentList = currentMap[dateKey]?.toMutableList() ?: mutableListOf()
-        currentList.add(activity)
-        currentMap[dateKey] = currentList
-        _loggedActivityMap.value = currentMap
-        saveActivityData(currentMap)
+    private fun loadFoodMap(prefKey: String): Map<String, List<FoodItem>> {
+        val stringData = prefs.getString(prefKey, "") ?: ""
+        if (stringData.isEmpty()) return emptyMap()
 
-        viewModelScope.launch {
-            streakManager.checkAndUpdateStreak()
+        val resultMap = mutableMapOf<String, MutableList<FoodItem>>()
+        for (itemStr in stringData.split("||")) {
+            if (itemStr.isBlank()) continue
+            val parts = itemStr.split("|")
+            if (parts.size >= 6) {
+                val key = parts[0]
+                val food = FoodItem(parts[1], parts[2].toIntOrNull() ?: 0, parts[3].toIntOrNull() ?: 0, parts[4].toIntOrNull() ?: 0, parts[5].toIntOrNull() ?: 0)
+                if (resultMap[key] == null) resultMap[key] = mutableListOf()
+                resultMap[key]!!.add(food)
+            }
         }
+        return resultMap
     }
 
-    fun updateWaterForDate(dateKey: String, waterMl: Int) {
-        val currentMap = _loggedWaterMap.value.toMutableMap()
-        currentMap[dateKey] = maxOf(0, waterMl)
-        _loggedWaterMap.value = currentMap
-        saveWaterData(currentMap)
+    // ĐÃ BỔ SUNG: Lưu/Đọc Bản đồ (Map) Hoạt động tập thể dục
+    private fun saveActivityMap(prefKey: String, map: Map<String, List<ActivityRecord>>) {
+        val sb = java.lang.StringBuilder()
+        for ((key, list) in map) {
+            for (record in list) {
+                sb.append("$key|${record.name}|${record.param}|${record.time}|${record.calories}||")
+            }
+        }
+        prefs.edit().putString(prefKey, sb.toString()).apply()
     }
 
-    fun clearAllSessionData() {
-        currentUserEmail = null
-        _loggedFoodMap.value = emptyMap()
-        _plannedFoodMap.value = emptyMap()
-        _loggedActivityMap.value = emptyMap()
-        _loggedWaterMap.value = emptyMap()
-        _recentFoods.value = emptyList()
-    }
-    private val _customFoods = mutableStateListOf<FoodItem>()
-    val customFoods: List<FoodItem> get() = _customFoods
+    private fun loadActivityMap(prefKey: String): Map<String, List<ActivityRecord>> {
+        val stringData = prefs.getString(prefKey, "") ?: ""
+        if (stringData.isEmpty()) return emptyMap()
 
-    // Hàm thêm món ăn mới vào danh sách custom
-    fun addCustomFood(food: FoodItem) {
-        _customFoods.add(0, food) // Thêm lên đầu danh sách
+        val resultMap = mutableMapOf<String, MutableList<ActivityRecord>>()
+        for (itemStr in stringData.split("||")) {
+            if (itemStr.isBlank()) continue
+            val parts = itemStr.split("|")
+            if (parts.size >= 5) {
+                val key = parts[0]
+                val record = ActivityRecord(parts[1], parts[2], parts[3], parts[4].toIntOrNull() ?: 0)
+                if (resultMap[key] == null) resultMap[key] = mutableListOf()
+                resultMap[key]!!.add(record)
+            }
+        }
+        return resultMap
+    }
+
+    // ĐÃ BỔ SUNG: Lưu/Đọc Bản đồ (Map) Lượng Nước
+    private fun saveWaterMap(prefKey: String, map: Map<String, Int>) {
+        val sb = java.lang.StringBuilder()
+        for ((key, water) in map) {
+            sb.append("$key|$water||")
+        }
+        prefs.edit().putString(prefKey, sb.toString()).apply()
+    }
+
+    private fun loadWaterMap(prefKey: String): Map<String, Int> {
+        val stringData = prefs.getString(prefKey, "") ?: ""
+        if (stringData.isEmpty()) return emptyMap()
+
+        val resultMap = mutableMapOf<String, Int>()
+        for (itemStr in stringData.split("||")) {
+            if (itemStr.isBlank()) continue
+            val parts = itemStr.split("|")
+            if (parts.size >= 2) {
+                resultMap[parts[0]] = parts[1].toIntOrNull() ?: 0
+            }
+        }
+        return resultMap
     }
 }

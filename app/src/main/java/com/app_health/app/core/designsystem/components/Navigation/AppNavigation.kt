@@ -21,6 +21,7 @@ import com.app_health.app.feature.auth.login.LoginScreen
 import com.app_health.app.feature.home.components.Account.CustomizeGoal
 import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
 import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
+import java.time.LocalDate
 
 @Composable
 fun AppNavigation(viewModel: HealthViewModel) {
@@ -34,8 +35,10 @@ fun AppNavigation(viewModel: HealthViewModel) {
     if (currentEmail == "loading") {
         return
     }
-    LaunchedEffect(currentEmail) {
-        viewModel.loadDataForUser(currentEmail)
+    LaunchedEffect(key1 = currentEmail) {
+        currentEmail?.let { email ->
+            viewModel.loadDataForUser(email)
+        }
     }
 
     val startDestination = if (currentEmail.isNullOrBlank()) "login" else "home"
@@ -144,6 +147,7 @@ fun AppNavigation(viewModel: HealthViewModel) {
         composable("food_select") {
             FoodSelectScreen(
                 viewModel = viewModel,
+                selectedDate = LocalDate.now().toString(), // ĐÃ SỬA: Bổ sung tham số ngày đang thiếu
                 timeSlot = String.format("%02d:00", java.time.LocalTime.now().hour),
                 onBack = { navController.popBackStack() }
             )
