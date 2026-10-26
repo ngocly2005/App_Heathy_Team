@@ -17,20 +17,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.app_health.app.core.designsystem.components.AppBottomNavigation
 import com.app_health.app.core.designsystem.components.BottomNavRoute
-import com.app_health.app.core.utils.NutritionCalculator
-import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.FoodSelectContent
 import com.app_health.app.feature.home.model.FoodItem
 import com.app_health.app.feature.home.model.FoodDatabase
 import com.app_health.app.feature.home.components.model.HealthViewModel
-import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
-import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
 import com.app_health.app.ui.theme.*
 import java.time.LocalDate
 
@@ -42,54 +37,19 @@ fun MenuScreen(
     onNavigateToSelectFood: () -> Unit = {},
     onNavigateToCaptureFood: () -> Unit = {}
 ) {
-    val context = LocalContext.current
-    val currentUserManager = remember { CurrentUserManager(context) }
-    val currentEmail by currentUserManager.currentEmailFlow.collectAsState(initial = null)
-    val authManager = remember(currentEmail) { DataAuthManager(context, currentEmail) }
-    val weightManager = remember { WeightManager(context) }
-
-    val userAge by authManager.savedAge.collectAsState(initial = 22)
-    val userHeight by authManager.savedHeight.collectAsState(initial = 166f)
-    val userGender by authManager.savedGender.collectAsState(initial = "Nữ")
-    val userActivityLevel by authManager.savedActivityLevel.collectAsState(initial = "Chăm chỉ tập luyện")
-    val userWeight by weightManager.currentWeightFlow.collectAsState(initial = 89f)
-
-    val customCal by authManager.savedCustomCalories.collectAsState(initial = 0f)
-    val customProtein by authManager.savedProteinPercent.collectAsState(initial = 25f)
-    val customCarbs by authManager.savedCarbsPercent.collectAsState(initial = 50f)
-    val customFat by authManager.savedFatPercent.collectAsState(initial = 25f)
-
-    val nutritionGoals = remember(
-        userWeight, userHeight, userAge, userGender, userActivityLevel,
-        customCal, customProtein, customCarbs, customFat
-    ) {
-        NutritionCalculator.calculate(
-            weight = userWeight,
-            height = userHeight,
-            age = userAge,
-            gender = userGender,
-            activityLevel = userActivityLevel,
-            customCalories = customCal,
-            proteinPct = customProtein,
-            carbsPct = customCarbs,
-            fatPct = customFat
-        )
-    }
-
-    val targetCalories = if (nutritionGoals.targetCalories > 0f) nutritionGoals.targetCalories.toInt() else 2000
+    // 1. TÁI SỬ DỤNG TARGET CALORIES TỪ VIEWMODEL
+    val uiState by viewModel.homeUiState.collectAsState()
+    // Nếu chưa nhập hồ sơ, tạm mặc định là 2000 calo để test
+    val targetCalories = if (uiState.targetCalories > 0) uiState.targetCalories else 2000
 
     var mealToAddTo by remember { mutableStateOf<String?>(null) }
-
-    // Xác định ngày hôm nay và thứ hiện tại để làm mặc định
     val today = remember { LocalDate.now() }
     val todayString = getDayOfWeekString(today)
     var currentDayForAdd by remember { mutableStateOf(todayString) }
 
     val plannedFoodsMap by viewModel.plannedFoodMap.collectAsState()
-
     val recentFoods by viewModel.recentFoods.collectAsState()
 
-    // Kiểm tra xem ngày đang chọn có phải là ngày trong quá khứ so với hôm nay không
     val isPastDay = isSelectedDayInPast(currentDayForAdd, today)
 
     if (mealToAddTo != null) {
@@ -97,8 +57,8 @@ fun MenuScreen(
             foodList = FoodDatabase.allFoods,
             customFoods = viewModel.customFoods,
             recentFoods = recentFoods,
-            favoriteFoods = viewModel.favoriteFoods, // ĐÃ THÊM: Truyền danh sách yêu thích
-            onToggleFavorite = { viewModel.toggleFavorite(it) }, // ĐÃ THÊM: Xử lý sự kiện bấm tim
+            favoriteFoods = viewModel.favoriteFoods,
+            onToggleFavorite = { viewModel.toggleFavorite(it) },
             onSaveCustomFood = { newFood ->
                 viewModel.addCustomFood(newFood)
             },
@@ -141,7 +101,7 @@ fun MenuScreen(
                     today = today,
                     onDaySelected = { currentDayForAdd = it },
                     plannedFoodsMap = plannedFoodsMap,
-                    targetCalories = targetCalories,
+                    targetCalories = targetCalories, // Truyền trực tiếp dữ liệu từ ViewModel
                     isPastDay = isPastDay,
                     onAddFoodClick = { mealName ->
                         if (!isPastDay) {
@@ -154,7 +114,7 @@ fun MenuScreen(
     }
 }
 
-// Hàm hỗ trợ chuyển LocalDate thành ký hiệu "T2", "T3",..."CN"
+// CÁC HÀM COMPOSABLE VÀ HELPER Ở DƯỚI GIỮ NGUYÊN NHƯ CODE CŨ CỦA BẠN...
 fun getDayOfWeekString(date: LocalDate): String {
     return when (date.dayOfWeek) {
         java.time.DayOfWeek.MONDAY -> "T2"
@@ -167,28 +127,20 @@ fun getDayOfWeekString(date: LocalDate): String {
     }
 }
 
-// Hàm kiểm tra xem thứ được chọn có nằm trong quá khứ so với hôm nay không
 fun isSelectedDayInPast(selectedDayStr: String, today: LocalDate): Boolean {
     val daysOfWeek = listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN")
     val todayStr = getDayOfWeekString(today)
     val todayIndex = daysOfWeek.indexOf(todayStr)
     val selectedIndex = daysOfWeek.indexOf(selectedDayStr)
-
     return selectedIndex < todayIndex
 }
 
-// Hàm hỗ trợ quy đổi từ chữ "T2", "T3"... về ngày tháng năm cụ thể (LocalDate) trong tuần hiện tại
 fun getActualDateFromDayString(dayStr: String, today: LocalDate): LocalDate {
     val daysOfWeek = listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN")
     val todayStr = getDayOfWeekString(today)
-
     val todayIndex = daysOfWeek.indexOf(todayStr)
     val targetIndex = daysOfWeek.indexOf(dayStr)
-
-    // Tính khoảng cách ngày giữa thứ được chọn và hôm nay
     val daysDifference = targetIndex - todayIndex
-
-    // Cộng hoặc trừ số ngày tương ứng để ra đúng LocalDate của thứ đó trong tuần này
     return today.plusDays(daysDifference.toLong())
 }
 
@@ -205,7 +157,6 @@ fun WeeklyPlanHeader(
     val daysOfWeek = listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN")
     val meals = listOf("Bữa sáng", "Bữa trưa", "Bữa tối", "Bữa phụ")
 
-    // Tính chuỗi ngày thực tế cho Tab thứ đang được chọn (VD: 2026-10-12)
     val actualDateStr = getActualDateFromDayString(selectedDay, today).toString()
 
     val totalConsumedCalories = meals.sumOf { mealName ->
@@ -214,7 +165,7 @@ fun WeeklyPlanHeader(
         foods.sumOf { it.calories }
     }
 
-    val isOverLimit = totalConsumedCalories > targetCalories
+    val isOverLimit = targetCalories > 0 && totalConsumedCalories > targetCalories
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyRow(

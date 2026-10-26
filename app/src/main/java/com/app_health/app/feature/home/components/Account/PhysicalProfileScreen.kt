@@ -16,64 +16,53 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.app_health.app.core.utils.NutritionCalculator
 import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
 import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
+import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhysicalProfileScreen(
+    viewModel: HealthViewModel, // ĐÃ THÊM: Truyền ViewModel
     onBackClick: () -> Unit = {},
     onNavigateToGoalSetup: () -> Unit = {}
 ) {
     val context = LocalContext.current
-
     val currentUserManager = remember { CurrentUserManager(context) }
     val currentEmail by currentUserManager.currentEmailFlow.collectAsState(initial = null)
+
+    // Giữ Manager để lấy các thông số phụ (tên, số đo vòng eo...)
     val authManager = remember(currentEmail) { DataAuthManager(context, currentEmail) }
-    val weightManager = remember { WeightManager(context) }
+    val weightManager = remember(currentEmail) { WeightManager(context, currentEmail) }
 
+    // ==========================================================
+    // LẤY DỮ LIỆU CỐT LÕI TỪ VIEWMODEL CHUNG
+    // ==========================================================
+    val uiState by viewModel.homeUiState.collectAsState()
+    val profile = uiState.profile
+    val nutritionGoals = uiState.nutritionGoals // Lấy thẳng Calo mục tiêu đã tính
+
+    // Các thông số phụ lấy từ DataStore
     val name by authManager.savedName.collectAsState(initial = "Người dùng")
-    val age by authManager.savedAge.collectAsState(initial = 0)
-    val height by authManager.savedHeight.collectAsState(initial = 0f)
-
-    // Lấy cân nặng từ WeightManager chung
-    val weight by weightManager.currentWeightFlow.collectAsState(initial = 0f)
+    val goalType by authManager.savedGoalType.collectAsState(initial = "")
     val targetWeight by weightManager.targetWeightFlow.collectAsState(initial = 0f)
 
-    val gender by authManager.savedGender.collectAsState(initial = "Nam")
     val waist by authManager.savedWaist.collectAsState(initial = 0f)
     val chest by authManager.savedChest.collectAsState(initial = 0f)
     val hips by authManager.savedHips.collectAsState(initial = 0f)
 
-    val activityLevel by authManager.savedActivityLevel.collectAsState(initial = "")
-    val goalType by authManager.savedGoalType.collectAsState(initial = "")
-
-    val heightInMeters = height / 100f
-    val bmi = if (heightInMeters > 0f && weight > 0f) weight / (heightInMeters * heightInMeters) else 0f
-
+    // Xác định phân loại BMI nhanh (dựa trên BMI đã tính sẵn trong ViewModel)
     val bmiStatus = when {
-        bmi == 0f -> "Chưa có đủ dữ liệu"
-        bmi < 18.5f -> "Thiếu cân"
-        bmi < 25f -> "Bình thường (Khỏe mạnh)"
-        bmi < 30f -> "Thừa cân"
+        profile.bmi == 0f -> "Chưa có đủ dữ liệu"
+        profile.bmi < 18.5f -> "Thiếu cân"
+        profile.bmi < 25f -> "Bình thường (Khỏe mạnh)"
+        profile.bmi < 30f -> "Thừa cân"
         else -> "Béo phì"
-    }
-
-    val nutritionGoals = remember(weight, height, age, gender, activityLevel) {
-        NutritionCalculator.calculate(
-            weight = weight,
-            height = height,
-            age = age,
-            gender = gender,
-            activityLevel = if (activityLevel.isNotBlank()) activityLevel else "Vận động nhẹ"
-        )
     }
 
     Scaffold(
@@ -82,9 +71,7 @@ fun PhysicalProfileScreen(
             TopAppBar(
                 title = { Text("Hồ sơ thể chất", fontWeight = FontWeight.Bold, color = TextPrimary) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AppBackground)
             )
@@ -117,18 +104,12 @@ fun PhysicalProfileScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(name ?: "Người dùng", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
 
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 16.dp),
-                            color = TextSecondary.copy(alpha = 0.1f)
-                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = TextSecondary.copy(alpha = 0.1f))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            InfoColumn(label = "GIỚI TÍNH", value = gender)
-                            InfoColumn(label = "TUỔI", value = if (age > 0) "$age" else "---")
-                            InfoColumn(label = "CHIỀU CAO", value = if (height > 0f) "${height.toInt()} cm" else "---")
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            InfoColumn(label = "GIỚI TÍNH", value = profile.gender)
+                            InfoColumn(label = "TUỔI", value = if (profile.age > 0) "${profile.age}" else "---")
+                            InfoColumn(label = "CHIỀU CAO", value = if (profile.height > 0f) "${profile.height.toInt()} cm" else "---")
                         }
                     }
                 }
@@ -145,9 +126,7 @@ fun PhysicalProfileScreen(
                     shadowElevation = 1.dp
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         InfoColumn(label = "VÒNG EO", value = if (waist > 0f) "${waist.toInt()} cm" else "---")
@@ -173,44 +152,28 @@ fun PhysicalProfileScreen(
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(if (goalType.isNotBlank()) goalType else "Chưa thiết lập", fontSize = 15.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(if (weight > 0f) "$weight kg" else "---", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = "To",
-                                    tint = TextSecondary,
-                                    modifier = Modifier
-                                        .padding(horizontal = 8.dp)
-                                        .size(16.dp)
-                                )
+                                Text(if (profile.weight > 0f) "${profile.weight} kg" else "---", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "To", tint = TextSecondary, modifier = Modifier.padding(horizontal = 8.dp).size(16.dp))
                                 Text(if (targetWeight > 0f) "$targetWeight kg" else "---", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                             }
                         }
 
                         HorizontalDivider(color = TextSecondary.copy(alpha = 0.1f))
+                        GoalRowStatic(label = "Cường độ vận động", value = if (profile.activityLevel.isNotBlank()) profile.activityLevel else "Chưa thiết lập")
 
-                        GoalRowStatic(
-                            label = "Cường độ vận động",
-                            value = if (activityLevel.isNotBlank()) activityLevel else "Chưa thiết lập"
-                        )
                         HorizontalDivider(color = TextSecondary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
+                        GoalRowStatic(label = "Chỉ số BMI của bạn", value = if (profile.bmi > 0f) String.format(Locale.getDefault(), "%.1f (%s)", profile.bmi, bmiStatus) else "Chưa đủ dữ liệu")
 
-                        GoalRowStatic(
-                            label = "Chỉ số BMI của bạn",
-                            value = if (bmi > 0f) String.format(Locale.getDefault(), "%.1f (%s)", bmi, bmiStatus) else "Chưa đủ dữ liệu"
-                        )
                         HorizontalDivider(color = TextSecondary.copy(alpha = 0.1f), modifier = Modifier.padding(horizontal = 16.dp))
-
                         GoalRowStatic(
                             label = "Calo mục tiêu hàng ngày",
-                            value = if (weight > 0f && height > 0f && age > 0 && activityLevel.isNotBlank()) "${nutritionGoals.targetCalories.toInt()} kcal" else "---"
+                            value = if (profile.isProfileUpdated && profile.activityLevel.isNotBlank()) "${nutritionGoals.targetCalories.toInt()} kcal" else "---"
                         )
                     }
                 }
@@ -219,9 +182,7 @@ fun PhysicalProfileScreen(
             // --- 4. Nút Thiết lập mục tiêu mới ---
             Button(
                 onClick = onNavigateToGoalSetup,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AppPrimaryLight),
                 shape = RoundedCornerShape(25.dp)
             ) {
@@ -249,19 +210,11 @@ fun InfoColumn(label: String, value: String) {
 @Composable
 fun GoalRowStatic(label: String, value: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, fontSize = 14.sp, color = TextSecondary)
         Text(value, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PhysicalProfileScreenPreview() {
-    PhysicalProfileScreen()
 }

@@ -23,17 +23,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.app_health.app.core.designsystem.components.AppBottomNavigation
 import com.app_health.app.core.designsystem.components.BottomNavRoute
-import com.app_health.app.core.utils.NutritionCalculator
 import com.app_health.app.core.utils.NutritionGoals
 import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
 import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
+import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 @Composable
 fun AccountScreen(
+    viewModel: HealthViewModel,
     currentRoute: BottomNavRoute = BottomNavRoute.ACCOUNT,
     onNavigate: (BottomNavRoute) -> Unit = {},
     onNavigateToUpdateMetrics: () -> Unit = {},
@@ -52,58 +53,32 @@ fun AccountScreen(
     val weightManager = remember(currentEmail) { WeightManager(context, currentEmail) }
 
     val userName by authManager.savedName.collectAsState(initial = "Đang tải...")
-    val userAge by authManager.savedAge.collectAsState(initial = 22)
-    val userHeight by authManager.savedHeight.collectAsState(initial = 166f)
-    val userGender by authManager.savedGender.collectAsState(initial = "Nữ")
-    val userActivityLevel by authManager.savedActivityLevel.collectAsState(initial = "Chăm chỉ tập luyện")
 
-
-    val userWeight by weightManager.currentWeightFlow.collectAsState(initial = 89f)
     val initialWeight by weightManager.initialWeightFlow.collectAsState(initial = 0f)
     val targetWeight by weightManager.targetWeightFlow.collectAsState(initial = 0f)
     val weightHistory by weightManager.weightHistoryFlow.collectAsState(initial = emptyList())
-
-
-    val customCal by authManager.savedCustomCalories.collectAsState(initial = 0f)
-    val customProtein by authManager.savedProteinPercent.collectAsState(initial = 25f)
-    val customCarbs by authManager.savedCarbsPercent.collectAsState(initial = 50f)
-    val customFat by authManager.savedFatPercent.collectAsState(initial = 25f)
 
     var showHistoryDialog by remember { mutableStateOf(false) }
     var showQuickUpdateDialog by remember { mutableStateOf(false) }
     var showSettingsScreen by remember { mutableStateOf(false) }
 
-    val nutritionGoals = remember(
-        userWeight, userHeight, userAge, userGender, userActivityLevel,
-        customCal, customProtein, customCarbs, customFat
-    ) {
-        NutritionCalculator.calculate(
-            weight = userWeight,
-            height = userHeight,
-            age = userAge,
-            gender = userGender,
-            activityLevel = userActivityLevel,
-            customCalories = customCal,
-            proteinPct = customProtein,
-            carbsPct = customCarbs,
-            fatPct = customFat
-        )
-    }
+    val uiState by viewModel.homeUiState.collectAsState()
+    val profile = uiState.profile
+    val nutritionGoals = uiState.nutritionGoals
 
     if (showSettingsScreen) {
         SettingScreen(
             name = userName ?: "Người dùng",
             email = currentEmail ?: "Chưa cập nhật email",
-            age = userAge,
-            height = userHeight,
-            weight = userWeight,
-            gender = userGender,
-            activityLevel = userActivityLevel,
+            age = profile.age,
+            height = profile.height,
+            weight = profile.weight,
+            gender = profile.gender,
+            activityLevel = profile.activityLevel,
             onBack = { showSettingsScreen = false },
             onLogout = {
                 coroutineScope.launch {
                     currentUserManager.clearSession()
-
                     showSettingsScreen = false
                     onNavigateToLogin()
                 }
@@ -127,25 +102,14 @@ fun AccountScreen(
                     .padding(innerPadding),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                item {
-                    ProfileHeader(
-                        name = userName ?: "Người dùng",
-                        onSettingsClick = { showSettingsScreen = true }
-                    )
-                }
+                item { ProfileHeader(name = userName ?: "Người dùng", onSettingsClick = { showSettingsScreen = true }) }
                 item { PremiumBanner() }
-                item { BasicStatsRow(age = userAge, height = userHeight, weight = userWeight) }
-
-                item {
-                    ActionButtonsRow(
-                        onUpdateMetricsClick = onNavigateToUpdateMetrics,
-                        onPhysicalProfileClick = onNavigateToPhysicalProfile
-                    )
-                }
+                item { BasicStatsRow(age = profile.age, height = profile.height, weight = profile.weight, bmi = profile.bmi) }
+                item { ActionButtonsRow(onUpdateMetricsClick = onNavigateToUpdateMetrics, onPhysicalProfileClick = onNavigateToPhysicalProfile) }
 
                 item {
                     WeightJourneySection(
-                        weight = userWeight,
+                        weight = profile.weight,
                         initialWeight = initialWeight,
                         targetWeight = targetWeight,
                         weightHistory = weightHistory,
@@ -154,37 +118,25 @@ fun AccountScreen(
                     )
                 }
 
-                item {
-                    NutritionGoalsSection(
-                        weight = userWeight,
-                        goals = nutritionGoals,
-                        onCustomGoalClick = onNavigateToCustomGoal
-                    )
-                }
+                item { NutritionGoalsSection(weight = profile.weight, goals = nutritionGoals, onCustomGoalClick = onNavigateToCustomGoal) }
             }
         }
     }
 
     if (showQuickUpdateDialog) {
         QuickUpdateWeightDialog(
-            currentWeight = userWeight,
+            currentWeight = profile.weight,
             onDismiss = { showQuickUpdateDialog = false },
             onConfirm = { newWeight ->
                 coroutineScope.launch {
                     weightManager.updateCurrentWeight(newWeight)
-                    authManager.saveCustomNutritionGoals(0f, customProtein, customCarbs, customFat)
                     showQuickUpdateDialog = false
                 }
             }
         )
     }
 
-    if (showHistoryDialog) {
-        WeightHistoryDialog(
-            weightHistory = weightHistory,
-            onDismiss = { showHistoryDialog = false }
-        )
-    }
+    if (showHistoryDialog) { WeightHistoryDialog(weightHistory = weightHistory, onDismiss = { showHistoryDialog = false }) }
 }
 
 @Composable
@@ -200,35 +152,20 @@ fun ProfileHeader(name: String, onSettingsClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Hồ sơ cá nhân", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            IconButton(onClick = onSettingsClick) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextSecondary)
-            }
+            IconButton(onClick = onSettingsClick) { Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextSecondary) }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Box(contentAlignment = Alignment.BottomEnd) {
             Box(
-                modifier = Modifier
-                    .size(90.dp)
-                    .clip(CircleShape)
-                    .background(AppPrimary),
+                modifier = Modifier.size(90.dp).clip(CircleShape).background(AppPrimary),
                 contentAlignment = Alignment.Center
-            ) {
-                Text(firstLetter, fontSize = 40.sp, color = Color.White, fontWeight = FontWeight.Bold)
-            }
+            ) { Text(firstLetter, fontSize = 40.sp, color = Color.White, fontWeight = FontWeight.Bold) }
             Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .padding(2.dp)
-                    .clip(CircleShape)
-                    .background(TextPrimary),
+                modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White).padding(2.dp).clip(CircleShape).background(TextPrimary),
                 contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Avatar", tint = Color.White, modifier = Modifier.size(16.dp))
-            }
+            ) { Icon(Icons.Default.Add, contentDescription = "Add Avatar", tint = Color.White, modifier = Modifier.size(16.dp)) }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -247,7 +184,7 @@ fun PremiumBanner() {
 }
 
 @Composable
-fun BasicStatsRow(age: Int, height: Float, weight: Float) {
+fun BasicStatsRow(age: Int, height: Float, weight: Float, bmi: Float) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
@@ -259,11 +196,11 @@ fun BasicStatsRow(age: Int, height: Float, weight: Float) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StatItem(icon = "📅", value = if (age > 0) "$age tuổi" else "---")
-            VerticalDivider(modifier = Modifier.height(24.dp), color = TextSecondary.copy(alpha = 0.2f))
             StatItem(icon = "🧍", value = if (height > 0f) "${height.toInt()} cm" else "---")
             VerticalDivider(modifier = Modifier.height(24.dp), color = TextSecondary.copy(alpha = 0.2f))
             StatItem(icon = "⚖️", value = if (weight > 0f) "$weight kg" else "---")
+            VerticalDivider(modifier = Modifier.height(24.dp), color = TextSecondary.copy(alpha = 0.2f))
+            StatItem(icon = "📊", value = if (bmi > 0f) String.format(Locale.getDefault(), "BMI %.1f", bmi) else "BMI ---")
         }
     }
 }
@@ -278,10 +215,7 @@ fun StatItem(icon: String, value: String) {
 }
 
 @Composable
-fun ActionButtonsRow(
-    onUpdateMetricsClick: () -> Unit,
-    onPhysicalProfileClick: () -> Unit
-) {
+fun ActionButtonsRow(onUpdateMetricsClick: () -> Unit, onPhysicalProfileClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -291,20 +225,19 @@ fun ActionButtonsRow(
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.buttonColors(containerColor = AppPrimaryLight),
             shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Cập nhật chỉ số", color = AppPrimary, fontWeight = FontWeight.Bold)
-        }
+        ) { Text("Cập nhật chỉ số", color = AppPrimary, fontWeight = FontWeight.Bold) }
         Button(
             onClick = onPhysicalProfileClick,
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.buttonColors(containerColor = AppPrimaryLight),
             shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Hồ sơ thể chất", color = AppPrimary, fontWeight = FontWeight.Bold)
-        }
+        ) { Text("Hồ sơ thể chất", color = AppPrimary, fontWeight = FontWeight.Bold) }
     }
 }
 
+// ==========================================
+// ĐÃ SỬA: LOGIC CẢNH BÁO ĐI NGƯỢC HƯỚNG
+// ==========================================
 @Composable
 fun WeightJourneySection(
     weight: Float,
@@ -317,11 +250,24 @@ fun WeightJourneySection(
     val startW = if (initialWeight > 0f) initialWeight else (weightHistory.firstOrNull() ?: weight)
     val diff = weight - startW
 
+    // Kiểm tra xem người dùng đang đi ngược hướng mục tiêu hay không
+    val isLosingGoal = targetWeight > 0f && targetWeight < startW
+    val isGainingGoal = targetWeight > 0f && targetWeight > startW
+
+    val isWrongDirection = when {
+        isLosingGoal && weight > startW -> true // Muốn giảm nhưng lại tăng
+        isGainingGoal && weight < startW -> true // Muốn tăng nhưng lại giảm
+        else -> false
+    }
+
     val diffText = when {
-        diff < 0 -> "Bạn đã giảm được ${String.format(Locale.getDefault(), "%.1f", -diff)} kg! 🎉"
-        diff > 0 -> "Bạn đã tăng ${String.format(Locale.getDefault(), "%.1f", diff)} kg."
+        diff < 0 -> "Bạn đã giảm được ${String.format(Locale.getDefault(), "%.1f", -diff)} kg!" + if (!isWrongDirection) " 🎉" else ""
+        diff > 0 -> "Bạn đã tăng ${String.format(Locale.getDefault(), "%.1f", diff)} kg." + if (!isWrongDirection) " 💪" else ""
         else -> "Bạn đang duy trì ổn định cân nặng."
     }
+
+    // Nếu sai hướng, chuyển chữ thành Đỏ
+    val statusColor = if (isWrongDirection) Color(0xFFD32F2F) else TextPrimary
 
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
         Row(
@@ -329,18 +275,12 @@ fun WeightJourneySection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.clickable { onHistoryClick() },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.clickable { onHistoryClick() }, verticalAlignment = Alignment.CenterVertically) {
                 Text("Hành trình của bạn", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(">", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
             }
-
-            TextButton(onClick = onQuickUpdateClick) {
-                Text("+ Cập nhật", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = AppPrimary)
-            }
+            TextButton(onClick = onQuickUpdateClick) { Text("+ Cập nhật", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = AppPrimary) }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -351,17 +291,15 @@ fun WeightJourneySection(
             color = AppSurface,
             shadowElevation = 1.dp
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("🎯", fontSize = 32.sp)
+            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                // Đổi icon nếu đang đi lùi
+                Text(if (isWrongDirection) "⚠️" else "🎯", fontSize = 32.sp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
                     text = if (weight > 0f) diffText else "Chưa có dữ liệu cân nặng",
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                    color = if (weight > 0f) statusColor else TextPrimary,
                     fontSize = 16.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -376,68 +314,59 @@ fun WeightJourneySection(
                 LinearWeightProgressBar(
                     initialWeight = startW,
                     currentWeight = weight,
-                    targetWeight = targetWeight
+                    targetWeight = targetWeight,
+                    isWrongDirection = isWrongDirection // Truyền trạng thái xuống thanh Bar
                 )
             }
         }
     }
 }
 
+// ==========================================
+// ĐÃ SỬA: BIỂU ĐỒ CHUYỂN ĐỎ VÀ VỀ 0 NẾU ĐI LÙI
+// ==========================================
 @Composable
 fun LinearWeightProgressBar(
     initialWeight: Float,
     currentWeight: Float,
-    targetWeight: Float
+    targetWeight: Float,
+    isWrongDirection: Boolean
 ) {
     val startW = if (initialWeight > 0f) initialWeight else currentWeight
     val targetW = if (targetWeight > 0f) targetWeight else startW
 
+    val isLosingGoal = targetW < startW
     val totalDistance = kotlin.math.abs(targetW - startW)
-    val currentProgress = if (totalDistance > 0f) {
-        val traveled = kotlin.math.abs(currentWeight - startW)
+
+    // Nếu đi sai hướng, cho vạch tiến trình về 0. Nếu đi đúng, tính toán chính xác phần trăm.
+    val currentProgress = if (isWrongDirection) {
+        0f
+    } else if (totalDistance > 0f) {
+        val traveled = if (isLosingGoal) startW - currentWeight else currentWeight - startW
         (traveled / totalDistance).coerceIn(0f, 1f)
     } else {
         0f
     }
 
+    // Đổi màu thanh tiến trình
+    val barColor = if (isWrongDirection) Color(0xFFD32F2F) else AppPrimary
+    val bgColor = if (isWrongDirection) Color(0xFFFFEBEE) else AppPrimaryLight.copy(alpha = 0.3f)
+
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(AppPrimaryLight.copy(alpha = 0.3f))
+            modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(bgColor)
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth(currentProgress)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(AppPrimary)
+                modifier = Modifier.fillMaxWidth(currentProgress).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(barColor)
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "$startW kg",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextSecondary
-            )
-            Text(
-                text = if (targetWeight > 0f) "$targetWeight kg" else "Mục tiêu",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextSecondary
-            )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(text = "$startW kg", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+            Text(text = if (targetWeight > 0f) "$targetWeight kg" else "Mục tiêu", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
         }
     }
 }
@@ -456,6 +385,24 @@ fun NutritionGoalsSection(weight: Float, goals: NutritionGoals, onCustomGoalClic
             shadowElevation = 1.dp
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Chỉ số BMR (Trao đổi chất cơ bản):", fontSize = 13.sp, color = TextSecondary)
+                    Text(
+                        text = if (hasData) "${goals.bmr.toInt()} kcal" else "---",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AppPrimary
+                    )
+                }
+
+                HorizontalDivider(color = TextSecondary.copy(alpha = 0.1f))
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically

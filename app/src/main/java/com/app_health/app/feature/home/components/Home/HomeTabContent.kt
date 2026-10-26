@@ -23,21 +23,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.app_health.app.core.designsystem.components.AppBottomNavigation
 import com.app_health.app.core.designsystem.components.BottomNavRoute
-import com.app_health.app.core.utils.NutritionCalculator
-import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.Home.Activities.ActivityDetailScreen
 import com.app_health.app.feature.home.components.Home.Activities.TrainingActivites
-import com.app_health.app.feature.home.components.Home.Water.WaterCalculator
 import com.app_health.app.feature.home.components.Home.Water.WaterIntakeCard
 import com.app_health.app.feature.home.components.Home.Water.WaterTargetScreen
 import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
 import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
 import com.app_health.app.feature.home.components.model.ActivityRecord
-import java.time.LocalDate
-import java.time.YearMonth
-
 import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
+import java.time.LocalDate
+import java.time.YearMonth
 
 @Composable
 fun HomeTabContent(
@@ -49,93 +45,42 @@ fun HomeTabContent(
 ) {
     val context = LocalContext.current
 
+    // Quản lý phiên đăng nhập và tên người dùng
     val currentUserManager = remember { CurrentUserManager(context) }
     val currentEmail by currentUserManager.currentEmailFlow.collectAsState(initial = null)
     val authManager = remember(currentEmail) { DataAuthManager(context, currentEmail) }
-    val weightManager = remember(currentEmail) { WeightManager(context) }
+    val userName by authManager.savedName.collectAsState(initial = "Người dùng mới")
+
     val streakManager = remember(currentEmail) { StreakManager(context, currentEmail) }
     val streakCount by streakManager.streakCountFlow.collectAsState(initial = 0)
+
     LaunchedEffect(currentEmail) {
         if (currentEmail != null) {
             streakManager.checkAndUpdateStreak()
         }
     }
-    val userName by authManager.savedName.collectAsState(initial = "Người dùng mới")
-    val userAge by authManager.savedAge.collectAsState(initial = 0)
-    val userHeight by authManager.savedHeight.collectAsState(initial = 0f)
-    val userGender by authManager.savedGender.collectAsState(initial = "")
-    val userActivityLevel by authManager.savedActivityLevel.collectAsState(initial = "")
-    val userWeight by weightManager.currentWeightFlow.collectAsState(initial = 0f)
 
-    // Đọc thông số tùy chỉnh Calo & Macro từ DataStore
-    val customCal by authManager.savedCustomCalories.collectAsState(initial = 0f)
-    val customProtein by authManager.savedProteinPercent.collectAsState(initial = 0f)
-    val customCarbs by authManager.savedCarbsPercent.collectAsState(initial = 0f)
-    val customFat by authManager.savedFatPercent.collectAsState(initial = 0f)
+    // ==========================================================
+    // "TRÁI TIM" CỦA GIAO DIỆN: Lấy toàn bộ dữ liệu từ ViewModel
+    // ==========================================================
+    val uiState by viewModel.homeUiState.collectAsState()
 
-    // Kiểm tra xem hồ sơ đã được cập nhật tối thiểu (cân nặng, chiều cao, tuổi) chưa
-    val isProfileUpdated = userWeight > 0f && userHeight > 0f && userAge > 0
-
-    // Tính toán dinh dưỡng động CHỈ KHI ĐÃ CẬP NHẬT HỒ SƠ
-    val nutritionGoals = remember(
-        isProfileUpdated, userWeight, userHeight, userAge, userGender, userActivityLevel,
-        customCal, customProtein, customCarbs, customFat
-    ) {
-        if (isProfileUpdated) {
-            NutritionCalculator.calculate(
-                weight = userWeight,
-                height = userHeight,
-                age = userAge,
-                gender = userGender,
-                activityLevel = userActivityLevel,
-                customCalories = customCal,
-                proteinPct = if(customProtein > 0) customProtein else 25f,
-                carbsPct = if(customCarbs > 0) customCarbs else 50f,
-                fatPct = if(customFat > 0) customFat else 25f
-            )
-        } else {
-            com.app_health.app.core.utils.NutritionGoals(
-                bmr = 0f,
-                tdee = 0f,
-                targetCalories = 0f,
-                proteinPercent = 0f,
-                carbsPercent = 0f,
-                fatPercent = 0f,
-                proteinGrams = 0,
-                carbsGrams = 0,
-                fatGrams = 0
-            )
-        }
-    }
-
-    val targetCalories = if (nutritionGoals.targetCalories > 0f) nutritionGoals.targetCalories.toInt() else 0
-
-    val loggedFoodMap by viewModel.loggedFoodMap.collectAsState()
-    val loggedActivityMap by viewModel.loggedActivityMap.collectAsState()
-
-    // Đọc dữ liệu nước uống vĩnh viễn từ ViewModel theo ngày được chọn
-    val loggedWaterMap by viewModel.loggedWaterMap.collectAsState()
-
-    val scrollState = rememberScrollState()
+    // Cần giữ biến ngày này để điều khiển UI của các pop-up lịch
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+
+    // Các biến phụ trợ cho hiển thị UI
+    val scrollState = rememberScrollState()
     var showMonthCalendar by remember { mutableStateOf(false) }
-
     var selectedActivity by remember { mutableStateOf<String?>(null) }
-
-    // Lấy lượng nước theo ngày từ ViewModel, mặc định là 0 nếu chưa có
-    val currentWaterMl = loggedWaterMap["$selectedDate"] ?: 0
     var waterStepVolume by remember { mutableIntStateOf(200) }
-    var showWaterWarning by remember { mutableStateOf(false) }
+    var showWaterWarningUI by remember { mutableStateOf(false) }
 
-    // Tính toán mục tiêu nước động (tính bằng ml) CHỈ KHI ĐÃ CẬP NHẬT HỒ SƠ
-    val calculatedWaterGoalLiters = remember(isProfileUpdated, userWeight, userActivityLevel) {
-        if (isProfileUpdated) {
-            WaterCalculator.calculateTargetLiters(userWeight, userActivityLevel)
-        } else {
-            0f
+    // Đồng bộ cảnh báo nước từ ViewModel
+    LaunchedEffect(uiState.showWaterWarning) {
+        if (uiState.showWaterWarning) {
+            showWaterWarningUI = true
         }
     }
-    val targetWaterMl = (calculatedWaterGoalLiters * 1000).toInt()
 
     val backgroundGradient = Brush.verticalGradient(
         colors = listOf(
@@ -146,28 +91,12 @@ fun HomeTabContent(
         endY = 1200f
     )
 
-    val timeSlots = (0..23).map { String.format("%02d:00", it) }
-
-    val dailyFoods = remember(selectedDate, loggedFoodMap) {
-        timeSlots.flatMap { time ->
-            loggedFoodMap["${selectedDate}_$time"] ?: emptyList()
-        }
-    }
-
-    val dailyConsumedCalories = dailyFoods.sumOf { it.calories }
-    val dailyProtein = dailyFoods.sumOf { it.protein }
-    val dailyCarbs = dailyFoods.sumOf { it.carbs }
-    val dailyFat = dailyFoods.sumOf { it.fat }
-
-    // Tính tổng calo tiêu hao do tập luyện trong ngày được chọn
-    val dailyActivities = loggedActivityMap["$selectedDate"] ?: emptyList()
-    val dailyBurnedCalories = dailyActivities.sumOf { it.calories }
-
-    val isOverCalories = targetCalories > 0 && dailyConsumedCalories > targetCalories
-
+    // ==========================================================
+    // ĐIỀU HƯỚNG CÁC POP-UP VÀ MÀN HÌNH CHI TIẾT
+    // ==========================================================
     if (selectedActivity == "WaterSettings") {
         WaterTargetScreen(
-            currentGoalLiters = calculatedWaterGoalLiters,
+            currentGoalLiters = uiState.targetWaterMl / 1000f,
             currentVolumeOption = waterStepVolume,
             onBack = { selectedActivity = null },
             onSave = { _: Float, volumeStep: Int ->
@@ -203,6 +132,10 @@ fun HomeTabContent(
             }
         )
     } else {
+
+        // ==========================================================
+        // GIAO DIỆN CHÍNH CỦA TRANG CHỦ
+        // ==========================================================
         Scaffold(
             bottomBar = {
                 AppBottomNavigation(
@@ -230,49 +163,55 @@ fun HomeTabContent(
                 )
                 Spacer(modifier = Modifier.height(28.dp))
 
+                // Thanh Lịch Vuốt Ngang
                 WeeklyCalendarSwipeable(
                     selectedDate = selectedDate,
-                    onDateSelected = { selectedDate = it }
+                    onDateSelected = {
+                        selectedDate = it // Cập nhật UI
+                        viewModel.updateSelectedDate(it) // Báo cho ViewModel tính toán lại
+                    }
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // NẾU CHƯA CẬP NHẬT HỒ SƠ -> HIỂN THỊ BANNER NHẮC NHỞ
-                if (!isProfileUpdated) {
+                // HIỂN THỊ BANNER NHẮC NHỞ NẾU CHƯA CÓ HỒ SƠ
+                if (!uiState.profile.isProfileUpdated) {
                     UpdateProfileBanner(onClick = { onNavigate(BottomNavRoute.ACCOUNT) })
                     Spacer(modifier = Modifier.height(24.dp))
                 } else {
+                    // NẾU CÓ HỒ SƠ THÌ HIỆN BIỂU ĐỒ CALO
                     CalorieTargetHeader()
                     Spacer(modifier = Modifier.height(24.dp))
 
                     CalorieRing(
-                        consumed = dailyConsumedCalories,
-                        target = targetCalories,
+                        consumed = uiState.dailyConsumedCalories,
+                        target = uiState.targetCalories,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    WarningBox(isOver = isOverCalories)
+                    WarningBox(isOver = uiState.isOverCalories)
                     Spacer(modifier = Modifier.height(20.dp))
                 }
 
+                // CÁC THẺ THÔNG TIN TRUYỀN DỮ LIỆU TỪ uiState XUỐNG
                 MacrosCard(
-                    protein = dailyProtein,
-                    carbs = dailyCarbs,
-                    fat = dailyFat,
-                    goals = nutritionGoals // nutritionGoals sẽ là 0 nếu chưa cập nhật
+                    protein = uiState.dailyProtein,
+                    carbs = uiState.dailyCarbs,
+                    fat = uiState.dailyFat,
+                    goals = uiState.nutritionGoals
                 )
                 Spacer(modifier = Modifier.height(25.dp))
 
                 RecentDiary(
-                    foods = dailyFoods.take(2),
+                    foods = uiState.consumedFoods.reversed().take(2),
                     onTitleClick = { onNavigate(BottomNavRoute.DIARY) }
                 )
                 Spacer(modifier = Modifier.height(25.dp))
 
                 StatsRow(
-                    consumed = dailyConsumedCalories,
-                    target = targetCalories,
-                    burned = dailyBurnedCalories
+                    consumed = uiState.dailyConsumedCalories,
+                    target = uiState.targetCalories,
+                    burned = uiState.dailyBurnedCalories
                 )
                 Spacer(modifier = Modifier.height(25.dp))
 
@@ -294,17 +233,14 @@ fun HomeTabContent(
                 Spacer(modifier = Modifier.height(25.dp))
 
                 WaterIntakeCard(
-                    currentWaterMl = currentWaterMl,
-                    targetWaterMl = if(isProfileUpdated) targetWaterMl else 2000, // Hiển thị 2000ml tạm thời nếu chưa có hồ sơ
+                    currentWaterMl = uiState.currentWaterMl,
+                    targetWaterMl = if(uiState.profile.isProfileUpdated) uiState.targetWaterMl else 2000,
                     onIncrease = {
-                        val newWater = currentWaterMl + waterStepVolume
+                        val newWater = uiState.currentWaterMl + waterStepVolume
                         viewModel.updateWaterForDate("$selectedDate", newWater)
-                        if (isProfileUpdated && newWater > targetWaterMl) {
-                            showWaterWarning = true
-                        }
                     },
                     onDecrease = {
-                        val newWater = if (currentWaterMl >= waterStepVolume) currentWaterMl - waterStepVolume else 0
+                        val newWater = if (uiState.currentWaterMl >= waterStepVolume) uiState.currentWaterMl - waterStepVolume else 0
                         viewModel.updateWaterForDate("$selectedDate", newWater)
                     },
                     onCardClick = {
@@ -316,13 +252,14 @@ fun HomeTabContent(
         }
     }
 
-    if (showWaterWarning) {
+    // Hiển thị Cảnh báo nước
+    if (showWaterWarningUI) {
         AlertDialog(
-            onDismissRequest = { showWaterWarning = false },
+            onDismissRequest = { showWaterWarningUI = false },
             title = { Text("Lưu ý", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("Bạn đã uống vượt quá số lượng nước mục tiêu (${targetWaterMl}ml)...", color = TextSecondary) },
+            text = { Text("Bạn đã uống vượt quá số lượng nước mục tiêu (${uiState.targetWaterMl}ml)...", color = TextSecondary) },
             confirmButton = {
-                TextButton(onClick = { showWaterWarning = false }) {
+                TextButton(onClick = { showWaterWarningUI = false }) {
                     Text("Đã hiểu", color = AppPrimary, fontWeight = FontWeight.Bold)
                 }
             },
@@ -331,12 +268,14 @@ fun HomeTabContent(
         )
     }
 
+    // Hiển thị Lịch popup chọn tháng
     if (showMonthCalendar) {
         MonthCalendarDialog(
             initialMonth = YearMonth.from(selectedDate),
             selectedDate = selectedDate,
             onDateSelected = { date ->
-                selectedDate = date
+                selectedDate = date // Cập nhật UI
+                viewModel.updateSelectedDate(date) // Gọi ViewModel
                 showMonthCalendar = false
             },
             onDismiss = { showMonthCalendar = false }
@@ -344,7 +283,10 @@ fun HomeTabContent(
     }
 }
 
-// Component nhắc nhở cập nhật hồ sơ
+// ==========================================================
+// CÁC COMPONENT PHỤ TRỢ BÊN DƯỚI GIỮ NGUYÊN
+// ==========================================================
+
 @Composable
 fun UpdateProfileBanner(onClick: () -> Unit) {
     Surface(
@@ -352,7 +294,7 @@ fun UpdateProfileBanner(onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable { onClick() }
             .shadow(2.dp, RoundedCornerShape(16.dp)),
-        color = Color(0xFFFFF3C4), // Màu nền vàng nhạt cảnh báo
+        color = Color(0xFFFFF3C4),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(

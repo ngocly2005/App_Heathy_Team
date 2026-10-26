@@ -17,10 +17,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.app_health.app.core.utils.NutritionCalculator
-import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
 import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
+import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -28,57 +27,36 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomizeGoal(
+    viewModel: HealthViewModel, // Truyền ViewModel từ AppNavigation vào đây
     onBackClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val currentUserManager = remember { CurrentUserManager(context) }
     val currentEmail by currentUserManager.currentEmailFlow.collectAsState(initial = null)
-
     val authManager = remember(currentEmail) { DataAuthManager(context, currentEmail) }
-    val weightManager = remember { WeightManager(context) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Đọc dữ liệu từ DataStore / WeightManager (giá trị initial chỉ là mức mặc định khi mới cài app lần đầu)
-    val userAge by authManager.savedAge.collectAsState(initial = 25)
-    val userHeight by authManager.savedHeight.collectAsState(initial = 170f)
-    val userGender by authManager.savedGender.collectAsState(initial = "Nam")
-    val userActivityLevel by authManager.savedActivityLevel.collectAsState(initial = "Vận động nhẹ")
-    val userWeight by weightManager.currentWeightFlow.collectAsState(initial = 65f)
+    // LẤY TOÀN BỘ DỮ LIỆU TỪ UI STATE ĐỂ KHÔNG PHẢI TÍNH LẠI
+    val uiState by viewModel.homeUiState.collectAsState()
+    val tdee = uiState.nutritionGoals.tdee // Lấy TDEE (tổng năng lượng tiêu hao) chuẩn
 
-// Tính toán động tự động bám sát 100% theo các biến state mới nhất của người dùng
-    val calculatedGoals = remember(userWeight, userHeight, userAge, userGender, userActivityLevel) {
-        NutritionCalculator.calculate(
-            weight = userWeight,
-            height = userHeight,
-            age = userAge,
-            gender = userGender,
-            activityLevel = userActivityLevel
-        )
-    }
-
-    // 3. Đọc dữ liệu tùy chỉnh đã lưu từ DataStore
     val currentCustomCal by authManager.savedCustomCalories.collectAsState(initial = 0f)
     val currentProteinPct by authManager.savedProteinPercent.collectAsState(initial = 0f)
     val currentCarbsPct by authManager.savedCarbsPercent.collectAsState(initial = 0f)
     val currentFatPct by authManager.savedFatPercent.collectAsState(initial = 0f)
 
-    // State form nhập liệu
     var calorieInput by remember { mutableStateOf("") }
     var proteinPct by remember { mutableFloatStateOf(25f) }
     var carbsPct by remember { mutableFloatStateOf(50f) }
     var fatPct by remember { mutableFloatStateOf(25f) }
-
     var isMacroInitialized by remember { mutableStateOf(false) }
 
-    // Đồng bộ thông minh:
-    // - Nếu user chưa từng lưu calo custom (currentCustomCal == 0f), ô nhập calo sẽ LUÔN cập nhật theo calculatedGoals mới nhất.
-    // - Nếu user đã từng custom, hiển thị số custom đó.
-    LaunchedEffect(currentCustomCal, calculatedGoals.targetCalories) {
-        val targetCalToDisplay = if (currentCustomCal > 0f) currentCustomCal else calculatedGoals.targetCalories
+    // Đồng bộ thông minh
+    LaunchedEffect(currentCustomCal, tdee) {
+        val targetCalToDisplay = if (currentCustomCal > 0f) currentCustomCal else tdee
         calorieInput = targetCalToDisplay.toInt().toString()
     }
 
-    // Khởi tạo tỷ lệ Macro lần đầu mở màn hình
     LaunchedEffect(currentProteinPct, currentCarbsPct, currentFatPct) {
         if (!isMacroInitialized) {
             proteinPct = if (currentProteinPct > 0f) currentProteinPct else 25f
@@ -97,9 +75,7 @@ fun CustomizeGoal(
             TopAppBar(
                 title = { Text("Tuỳ chỉnh mục tiêu", fontWeight = FontWeight.Bold, color = TextPrimary) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AppBackground)
             )
@@ -109,7 +85,7 @@ fun CustomizeGoal(
                 Box(modifier = Modifier.padding(16.dp)) {
                     Button(
                         onClick = {
-                            val parsedCal = calorieInput.toFloatOrNull() ?: calculatedGoals.targetCalories
+                            val parsedCal = calorieInput.toFloatOrNull() ?: tdee
                             coroutineScope.launch {
                                 authManager.saveCustomNutritionGoals(
                                     calories = parsedCal,
@@ -117,6 +93,8 @@ fun CustomizeGoal(
                                     carbsPct = carbsPct,
                                     fatPct = fatPct
                                 )
+                                viewModel.loadDataForUser(currentEmail ?: "")
+
                                 onBackClick()
                             }
                         },

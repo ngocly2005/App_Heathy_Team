@@ -18,29 +18,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.app_health.app.core.designsystem.components.AppBottomNavigation
 import com.app_health.app.core.designsystem.components.BottomNavRoute
-import com.app_health.app.core.utils.NutritionCalculator
-import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.Home.MacrosCard
-import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
-import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
 import com.app_health.app.ui.theme.*
 import java.time.LocalDate
 
-// Import Model và Database
+// Import Utils và Model
+import com.app_health.app.core.utils.toFriendlyString
 import com.app_health.app.feature.home.model.FoodItem
 import com.app_health.app.feature.home.model.FoodDatabase
 import com.app_health.app.feature.home.components.FoodSelectContent
 import com.app_health.app.feature.home.components.model.HealthViewModel
-import com.app_health.app.feature.home.components.Home.toFriendlyString
 
 @Composable
 fun DiaryScreen(
@@ -48,42 +42,9 @@ fun DiaryScreen(
     currentRoute: BottomNavRoute = BottomNavRoute.DIARY,
     onNavigate: (BottomNavRoute) -> Unit = {}
 ) {
-    val context = LocalContext.current
-    val currentUserManager = remember { CurrentUserManager(context) }
-    val currentEmail by currentUserManager.currentEmailFlow.collectAsState(initial = null)
-    val authManager = remember(currentEmail) { DataAuthManager(context, currentEmail) }
-    val weightManager = remember { WeightManager(context) }
-
-    // Đọc thông số người dùng để tính toán mục tiêu đồng bộ
-    val userAge by authManager.savedAge.collectAsState(initial = 22)
-    val userHeight by authManager.savedHeight.collectAsState(initial = 166f)
-    val userGender by authManager.savedGender.collectAsState(initial = "Nữ")
-    val userActivityLevel by authManager.savedActivityLevel.collectAsState(initial = "Chăm chỉ tập luyện")
-    val userWeight by weightManager.currentWeightFlow.collectAsState(initial = 89f)
-
-    // Đọc thông số tùy chỉnh Calo & Macro từ DataStore
-    val customCal by authManager.savedCustomCalories.collectAsState(initial = 0f)
-    val customProtein by authManager.savedProteinPercent.collectAsState(initial = 25f)
-    val customCarbs by authManager.savedCarbsPercent.collectAsState(initial = 50f)
-    val customFat by authManager.savedFatPercent.collectAsState(initial = 25f)
-
-    // Tính toán dinh dưỡng động đồng bộ giữa các màn hình
-    val nutritionGoals = remember(
-        userWeight, userHeight, userAge, userGender, userActivityLevel,
-        customCal, customProtein, customCarbs, customFat
-    ) {
-        NutritionCalculator.calculate(
-            weight = userWeight,
-            height = userHeight,
-            age = userAge,
-            gender = userGender,
-            activityLevel = userActivityLevel,
-            customCalories = customCal,
-            proteinPct = customProtein,
-            carbsPct = customCarbs,
-            fatPct = customFat
-        )
-    }
+    // 1. TÁI SỬ DỤNG STATE TỪ VIEWMODEL (Không cần tự tính toán nữa)
+    val uiState by viewModel.homeUiState.collectAsState()
+    val nutritionGoals = uiState.nutritionGoals
 
     val timeSlots = (0..23).map { hour ->
         String.format("%02d:00", hour)
@@ -93,13 +54,11 @@ fun DiaryScreen(
     var selectedDate by remember { mutableStateOf(today) }
 
     val dateText = selectedDate.toFriendlyString()
-
-    // Kiểm tra xem ngày đang chọn có phải là ngày trong quá khứ so với hôm nay không
     val isPastDate = selectedDate.isBefore(today)
 
     var selectedTimeSlotForAdd by remember { mutableStateOf<String?>(null) }
-    val loggedFoodMap by viewModel.loggedFoodMap.collectAsState()
 
+    val loggedFoodMap by viewModel.loggedFoodMap.collectAsState()
     val recentFoods by viewModel.recentFoods.collectAsState()
 
     if (selectedTimeSlotForAdd != null) {
@@ -107,8 +66,8 @@ fun DiaryScreen(
             foodList = FoodDatabase.allFoods,
             customFoods = viewModel.customFoods,
             recentFoods = recentFoods,
-            favoriteFoods = viewModel.favoriteFoods, // ĐÃ THÊM: Truyền danh sách yêu thích
-            onToggleFavorite = { viewModel.toggleFavorite(it) }, // ĐÃ THÊM: Xử lý sự kiện bấm tim
+            favoriteFoods = viewModel.favoriteFoods,
+            onToggleFavorite = { viewModel.toggleFavorite(it) },
             onSaveCustomFood = { newFood ->
                 viewModel.addCustomFood(newFood)
             },
@@ -136,7 +95,7 @@ fun DiaryScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // Thanh chọn ngày tối giản, thanh thoát nằm trực tiếp trên nền màn hình
+                // Thanh chọn ngày
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -148,17 +107,12 @@ fun DiaryScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Nút lùi ngày
                         IconButton(
                             onClick = { selectedDate = selectedDate.minusDays(1) },
                             enabled = true,
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ChevronLeft,
-                                contentDescription = "Previous Day",
-                                tint = TextPrimary
-                            )
+                            Icon(imageVector = Icons.Default.ChevronLeft, contentDescription = "Previous", tint = TextPrimary)
                         }
 
                         Text(
@@ -170,7 +124,6 @@ fun DiaryScreen(
                             textAlign = TextAlign.Center
                         )
 
-                        // Nút tiến ngày
                         IconButton(
                             onClick = { selectedDate = selectedDate.plusDays(1) },
                             enabled = selectedDate.isBefore(today),
@@ -202,7 +155,7 @@ fun DiaryScreen(
                         protein = totalPro,
                         carbs = totalCarbs,
                         fat = totalFat,
-                        goals = nutritionGoals
+                        goals = nutritionGoals // Truyền thẳng dữ liệu đã tính từ ViewModel
                     )
                 }
 
@@ -233,6 +186,7 @@ fun DiaryScreen(
     }
 }
 
+// CÁC HÀM COMPOSABLE Ở DƯỚI (TimeSlotRow, LoggedFoodCard) GIỮ NGUYÊN NHƯ CODE CŨ CỦA BẠN...
 @Composable
 fun TimeSlotRow(
     time: String,

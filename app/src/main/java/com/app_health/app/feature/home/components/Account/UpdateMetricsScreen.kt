@@ -24,12 +24,14 @@ import androidx.compose.ui.unit.sp
 import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager
 import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
+import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpdateMetricsScreen(
+    viewModel: HealthViewModel,
     onBackClick: () -> Unit = {},
     onSaveClick: () -> Unit = {}
 ) {
@@ -38,31 +40,35 @@ fun UpdateMetricsScreen(
     val currentEmail by currentUserManager.currentEmailFlow.collectAsState(initial = null)
 
     val authManager = remember(currentEmail) { DataAuthManager(context, currentEmail) }
-    val weightManager = remember { WeightManager(context) }
+    val weightManager = remember(currentEmail) { WeightManager(context, currentEmail) }
     val coroutineScope = rememberCoroutineScope()
 
-    val currentAge by authManager.savedAge.collectAsState(initial = 0)
-    val currentHeight by authManager.savedHeight.collectAsState(initial = 0f)
-    val currentWeight by weightManager.currentWeightFlow.collectAsState(initial = 0f)
-    val currentGender by authManager.savedGender.collectAsState(initial = "Nam")
+    // LẤY DỮ LIỆU CỐT LÕI TỪ VIEWMODEL CHUNG
+    val uiState by viewModel.homeUiState.collectAsState()
+    val profile = uiState.profile
+
+    // LẤY CÁC CHỈ SỐ PHỤ TỪ DATASTORE
     val currentWaist by authManager.savedWaist.collectAsState(initial = 0f)
     val currentChest by authManager.savedChest.collectAsState(initial = 0f)
     val currentHips by authManager.savedHips.collectAsState(initial = 0f)
-    val currentActivity by authManager.savedActivityLevel.collectAsState(initial = "Vận động nhẹ")
 
+    // State form nhập liệu
     var age by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
     var weight by remember { mutableStateOf("") }
     var selectedGender by remember { mutableStateOf("Nam") }
+
     var waist by remember { mutableStateOf("") }
     var chest by remember { mutableStateOf("") }
     var hips by remember { mutableStateOf("") }
 
-    LaunchedEffect(currentAge, currentHeight, currentWeight, currentGender, currentWaist, currentChest, currentHips) {
-        if (age.isEmpty() && currentAge > 0) age = currentAge.toString()
-        if (height.isEmpty() && currentHeight > 0f) height = currentHeight.toString()
-        if (weight.isEmpty() && currentWeight > 0f) weight = currentWeight.toString()
-        if (currentGender.isNotBlank()) selectedGender = currentGender
+    // Đồng bộ dữ liệu vào Form
+    LaunchedEffect(profile, currentWaist, currentChest, currentHips) {
+        if (age.isEmpty() && profile.age > 0) age = profile.age.toString()
+        if (height.isEmpty() && profile.height > 0f) height = profile.height.toString()
+        if (weight.isEmpty() && profile.weight > 0f) weight = profile.weight.toString()
+        if (profile.gender.isNotBlank()) selectedGender = profile.gender
+
         if (waist.isEmpty() && currentWaist > 0f) waist = currentWaist.toString()
         if (chest.isEmpty() && currentChest > 0f) chest = currentChest.toString()
         if (hips.isEmpty() && currentHips > 0f) hips = currentHips.toString()
@@ -76,19 +82,13 @@ fun UpdateMetricsScreen(
             TopAppBar(
                 title = { Text("Cập nhật chỉ số", fontWeight = FontWeight.Bold, color = TextPrimary) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
+                    IconButton(onClick = onBackClick) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AppBackground)
             )
         },
         bottomBar = {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = AppSurface,
-                shadowElevation = 8.dp
-            ) {
+            Surface(modifier = Modifier.fillMaxWidth(), color = AppSurface, shadowElevation = 8.dp) {
                 Box(modifier = Modifier.padding(16.dp)) {
                     Button(
                         onClick = {
@@ -100,6 +100,7 @@ fun UpdateMetricsScreen(
                             val parsedHips = hips.toFloatOrNull() ?: 0f
 
                             coroutineScope.launch {
+                                // Lưu dữ liệu vào DataStore
                                 authManager.saveFullMetrics(
                                     age = parsedAge,
                                     height = parsedHeight,
@@ -108,22 +109,23 @@ fun UpdateMetricsScreen(
                                     waist = parsedWaist,
                                     chest = parsedChest,
                                     hips = parsedHips,
-                                    activityLevel = currentActivity
+                                    activityLevel = profile.activityLevel // Giữ nguyên Activity level cũ
                                 )
 
                                 if (parsedWeight > 0f) {
                                     weightManager.saveWeightMetrics(parsedWeight)
                                 }
 
-                                // Reset toàn bộ Calo và Macro về 0 để hệ thống tự động tính lại theo công thức chuẩn mới
+                                // Reset Calo để tự động tính lại
                                 authManager.saveCustomNutritionGoals(0f, 0f, 0f, 0f)
+
+                                // FIX LỖI KHÔNG ĐỒNG BỘ: Yêu cầu ViewModel cập nhật ngay dữ liệu mới!
+                                viewModel.loadDataForUser(currentEmail ?: "")
 
                                 onSaveClick()
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -155,12 +157,7 @@ fun UpdateMetricsScreen(
                         label = { Text("Tuổi", fontSize = 12.sp) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AppPrimary,
-                            unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f),
-                            focusedContainerColor = AppSurface,
-                            unfocusedContainerColor = AppSurface
-                        ),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AppPrimary, unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f), focusedContainerColor = AppSurface, unfocusedContainerColor = AppSurface),
                         singleLine = true
                     )
                     OutlinedTextField(
@@ -170,12 +167,7 @@ fun UpdateMetricsScreen(
                         label = { Text("Chiều cao", fontSize = 12.sp) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AppPrimary,
-                            unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f),
-                            focusedContainerColor = AppSurface,
-                            unfocusedContainerColor = AppSurface
-                        ),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AppPrimary, unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f), focusedContainerColor = AppSurface, unfocusedContainerColor = AppSurface),
                         trailingIcon = { Text("cm", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(end = 8.dp)) },
                         singleLine = true
                     )
@@ -200,16 +192,8 @@ fun UpdateMetricsScreen(
                                 ),
                             color = if (isSelected) AppPrimaryLight.copy(alpha = 0.4f) else AppSurface
                         ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = gender,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) AppPrimary else TextPrimary,
-                                    fontSize = 14.sp
-                                )
+                            Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                Text(text = gender, fontWeight = FontWeight.Bold, color = if (isSelected) AppPrimary else TextPrimary, fontSize = 14.sp)
                             }
                         }
                     }
@@ -224,12 +208,7 @@ fun UpdateMetricsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppPrimary,
-                        unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f),
-                        focusedContainerColor = AppSurface,
-                        unfocusedContainerColor = AppSurface
-                    ),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AppPrimary, unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f), focusedContainerColor = AppSurface, unfocusedContainerColor = AppSurface),
                     trailingIcon = { Text("kg", color = TextSecondary, modifier = Modifier.padding(end = 16.dp)) },
                     singleLine = true
                 )
@@ -237,10 +216,7 @@ fun UpdateMetricsScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionTitle(icon = "📏", title = "Số đo cơ thể (Tùy chọn)")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     MeasurementInput(modifier = Modifier.weight(1f), label = "Vòng eo", value = waist, onValueChange = { waist = it })
                     MeasurementInput(modifier = Modifier.weight(1f), label = "Vòng ngực", value = chest, onValueChange = { chest = it })
                     MeasurementInput(modifier = Modifier.weight(1f), label = "Vòng mông", value = hips, onValueChange = { hips = it })
@@ -250,10 +226,7 @@ fun UpdateMetricsScreen(
     }
 }
 
-// ==========================================
-// CÁC HÀM PHỤ TRỢ (ĐẶT Ở CUỐI TỆP)
-// ==========================================
-
+// CÁC HÀM PHỤ TRỢ
 @Composable
 fun SectionTitle(icon: String, title: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -264,12 +237,7 @@ fun SectionTitle(icon: String, title: String) {
 }
 
 @Composable
-fun MeasurementInput(
-    modifier: Modifier,
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit
-) {
+fun MeasurementInput(modifier: Modifier, label: String, value: String, onValueChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -277,12 +245,7 @@ fun MeasurementInput(
         label = { Text(label, fontSize = 12.sp, color = TextSecondary) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         shape = RoundedCornerShape(12.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AppPrimary,
-            unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f),
-            focusedContainerColor = AppSurface,
-            unfocusedContainerColor = AppSurface
-        ),
+        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AppPrimary, unfocusedBorderColor = TextSecondary.copy(alpha = 0.2f), focusedContainerColor = AppSurface, unfocusedContainerColor = AppSurface),
         trailingIcon = { Text("cm", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(end = 8.dp)) },
         singleLine = true
     )

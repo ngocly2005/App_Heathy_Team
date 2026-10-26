@@ -24,32 +24,29 @@ object NutritionCalculator {
         carbsPct: Float = 0f,
         fatPct: Float = 0f
     ): NutritionGoals {
-        // Fallback an toàn nếu người dùng chưa nhập đủ thông tin (tránh crash)
         val validWeight = if (weight > 0f) weight else 60f
         val validHeight = if (height > 0f) height else 165f
         val validAge = if (age > 0) age else 25
 
-        // 1. Tính BMR theo công thức Mifflin - St Jeor chuẩn xác theo giới tính
+        // ĐÃ SỬA LỖI: Thêm dấu * vào công thức tính toán
         val bmr = if (gender.trim().equals("Nữ", ignoreCase = true)) {
-            (10 * validWeight) + (6.25f * validHeight) - (5 * validAge) - 161f
+            (10f * validWeight) + (6.25f * validHeight) - (5f * validAge) - 161f
         } else {
-            (10 * validWeight) + (6.25f * validHeight) - (5 * validAge) + 5f
+            (10f * validWeight) + (6.25f * validHeight) - (5f * validAge) + 5f
         }
 
-        // 2. Hệ số vận động
         val activityMultiplier = when (activityLevel.trim()) {
             "Ít vận động" -> 1.2f
             "Vận động nhẹ" -> 1.375f
             "Vận động vừa" -> 1.55f
             "Vận động nhiều" -> 1.725f
             "Vận động rất nhiều" -> 1.9f
-            else -> 1.375f // Mặc định an toàn nếu chuỗi rỗng hoặc chưa chọn
+            else -> 1.375f
         }
 
         val tdee = bmr * activityMultiplier
         val targetCalories = if (customCalories > 0f) customCalories else tdee
 
-        // 3. Tỷ lệ Macro (ưu tiên giá trị người dùng tự chỉnh, nếu chưa thì dùng chuẩn 25-50-25)
         val useValidCustomMacro = proteinPct > 0f && carbsPct > 0f && fatPct > 0f &&
                 kotlin.math.abs((proteinPct + carbsPct + fatPct) - 100f) < 0.1f
 

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.app_health.app.core.utils.WeightManager
 import com.app_health.app.feature.home.components.LoginLogout.DataAuthManager
+import com.app_health.app.feature.home.components.model.HealthViewModel
 import com.app_health.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -25,22 +26,29 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoalSetupViewModel(
+    viewModel: HealthViewModel,
     authManager: DataAuthManager,
     onBackToProfile: () -> Unit
 ) {
     val context = LocalContext.current
-    val weightManager = remember { WeightManager(context) }
     val coroutineScope = rememberCoroutineScope()
+
+    // Sắp xếp lại thứ tự 3 dòng này như sau:
+    val currentUserManager = remember { com.app_health.app.feature.home.components.LoginLogout.CurrentUserManager(context) }
+    val currentEmail by currentUserManager.currentEmailFlow.collectAsState(initial = null)
+
+    if (currentEmail == null) {
+        return // Không làm gì cả, chờ đến khi có email
+    }
+    // Gắn email vào WeightManager
+    val weightManager = remember(currentEmail) { WeightManager(context, currentEmail) }
 
     var isSummaryScreen by remember { mutableStateOf(false) }
 
-    val savedAge by authManager.savedAge.collectAsState(initial = 0)
-    val savedHeight by authManager.savedHeight.collectAsState(initial = 166f)
-    val savedGoal by authManager.savedGoalType.collectAsState(initial = "Giảm cân")
-    val savedActivity by authManager.savedActivityLevel.collectAsState(initial = "Vận động nhẹ")
+    val uiState by viewModel.homeUiState.collectAsState()
+    val profile = uiState.profile
 
-    // Đọc cân nặng hiện tại và mục tiêu từ WeightManager chung
-    val savedWeight by weightManager.currentWeightFlow.collectAsState(initial = 0f)
+    val savedGoal by authManager.savedGoalType.collectAsState(initial = "Giảm cân")
     val savedTargetW by weightManager.targetWeightFlow.collectAsState(initial = 0f)
 
     var goalType by remember { mutableStateOf("Giảm cân") }
@@ -49,10 +57,9 @@ fun GoalSetupViewModel(
     var activityLevel by remember { mutableStateOf("Vận động nhẹ nhàng") }
     var weeklyKg by remember { mutableStateOf(0.5f) }
 
-    // Đồng bộ giá trị từ DataStore khi màn hình khởi tạo
-    LaunchedEffect(savedWeight) {
-        if (savedWeight > 0f && currentWeight.isEmpty()) {
-            currentWeight = savedWeight.toString()
+    LaunchedEffect(profile.weight) {
+        if (profile.weight > 0f && currentWeight.isEmpty()) {
+            currentWeight = profile.weight.toString()
         }
     }
 
@@ -62,13 +69,12 @@ fun GoalSetupViewModel(
         }
     }
 
-    LaunchedEffect(savedGoal, savedActivity) {
+    LaunchedEffect(savedGoal, profile.activityLevel) {
         if (savedGoal.isNotBlank()) goalType = savedGoal
-        if (savedActivity.isNotBlank()) activityLevel = savedActivity
+        if (profile.activityLevel.isNotBlank()) activityLevel = profile.activityLevel
     }
 
-    // Logic ràng buộc tùy chọn mục tiêu dựa trên cân nặng hiện tại và mong muốn
-    val curW = currentWeight.toFloatOrNull() ?: savedWeight
+    val curW = currentWeight.toFloatOrNull() ?: profile.weight
     val tarW = targetWeight.toFloatOrNull() ?: savedTargetW
 
     val availableOptions = remember(curW, tarW) {
@@ -232,9 +238,9 @@ fun GoalSetupViewModel(
                     }
                 } else {
                     // --- TRANG 2: MÀN HÌNH TỔNG HỢP ---
-                    val finalCurW = currentWeight.toFloatOrNull() ?: savedWeight
+                    val finalCurW = currentWeight.toFloatOrNull() ?: profile.weight
                     val finalTarW = targetWeight.toFloatOrNull() ?: savedTargetW
-                    val heightM = savedHeight / 100f
+                    val heightM = profile.height / 100f
                     val bmi = if (heightM > 0f) finalCurW / (heightM * heightM) else 0f
 
                     val (bmiStatus, bmiDescription) = when {
@@ -297,17 +303,18 @@ fun GoalSetupViewModel(
                         isSummaryScreen = true
                     } else {
                         coroutineScope.launch {
-                            // Lấy chính xác giá trị từ ô nhập liệu, không bị gán cứng mặc định
-                            val finalCurW = currentWeight.toFloatOrNull() ?: savedWeight
+                            val finalCurW = currentWeight.toFloatOrNull() ?: profile.weight
                             val finalTarW = targetWeight.toFloatOrNull() ?: savedTargetW
 
-                            // Lưu thông tin đồng bộ vào WeightManager và DataAuthManager
                             weightManager.setupNewGoal(initialWeight = finalCurW, targetWeight = finalTarW)
                             authManager.savePhysicalGoals(
                                 goalType = goalType,
                                 targetWeight = finalTarW,
                                 activityLevel = activityLevel
                             )
+
+                            // TẢI LẠI DỮ LIỆU ĐỂ ĐỒNG BỘ MÀN HÌNH
+                            viewModel.loadDataForUser(currentEmail ?: "")
 
                             onBackToProfile()
                         }
