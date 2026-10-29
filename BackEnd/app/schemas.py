@@ -70,3 +70,33 @@ class ProfileResponse(BaseModel):
     bmr_kcal: float
     tdee_kcal: float
     updated_at: datetime
+
+
+MealType = Literal["breakfast", "lunch", "dinner", "snack"]
+
+
+class FoodLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    food_id: int | None
+    log_date: date
+    meal_type: str
+    grams: float
+    food_name: str
+    calories_kcal: float
+    protein_g: float
+    carb_g: float
+    fat_g: float
+    created_at: datetime
+
+
+class DailyDashboardResponse(BaseModel):
+    date: date
+    calories_consumed: float
+    calories_burned: float
+    net_calories: float
+    calorie_target: float | None
+    calories_remaining: float | None
+    water_ml: int
+    food_logs: list[FoodLogResponse]

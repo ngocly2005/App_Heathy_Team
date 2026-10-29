@@ -1,9 +1,11 @@
 from datetime import UTC, date, datetime
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -79,3 +81,52 @@ class HealthProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class Food(Base):
+    __tablename__ = "foods"
+    __table_args__ = (
+        CheckConstraint("calories_per_100g >= 0", name="ck_food_calories"),
+        CheckConstraint("protein_per_100g >= 0", name="ck_food_protein"),
+        CheckConstraint("carb_per_100g >= 0", name="ck_food_carbs"),
+        CheckConstraint("fat_per_100g >= 0", name="ck_food_fat"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), unique=True)
+    calories_per_100g: Mapped[float] = mapped_column(Numeric(8, 2))
+    protein_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    carb_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    fat_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class FoodLog(Base):
+    __tablename__ = "food_logs"
+    __table_args__ = (
+        CheckConstraint("grams > 0", name="ck_food_log_grams"),
+        CheckConstraint("calories_kcal >= 0", name="ck_food_log_calories"),
+        CheckConstraint("protein_g >= 0", name="ck_food_log_protein"),
+        CheckConstraint("carb_g >= 0", name="ck_food_log_carbs"),
+        CheckConstraint("fat_g >= 0", name="ck_food_log_fat"),
+        CheckConstraint(
+            "meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')",
+            name="ck_food_log_meal_type",
+        ),
+        Index("ix_food_logs_user_date", "user_id", "log_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    food_id: Mapped[int | None] = mapped_column(
+        ForeignKey("foods.id", ondelete="SET NULL")
+    )
+    log_date: Mapped[date] = mapped_column(Date)
+    meal_type: Mapped[str] = mapped_column(String(20))
+    grams: Mapped[float] = mapped_column(Numeric(8, 2))
+    food_name: Mapped[str] = mapped_column(String(160))
+    calories_kcal: Mapped[float] = mapped_column(Numeric(9, 2))
+    protein_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
+    carb_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
+    fat_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
