@@ -1,9 +1,12 @@
+from datetime import date
+
 from fastapi import APIRouter, HTTPException
+from sqlalchemy import select
+
 from app.calculations import calculate_age, calculate_bmi, calculate_bmr, calculate_tdee
 from app.dependencies import CurrentUser, DbSession
-from app.models import HealthProfile
+from app.models import HealthProfile, WeightEntry
 from app.schemas import ProfileResponse, ProfileUpsert
-
 
 router = APIRouter(prefix="/profile", tags=["health profile"])
 
@@ -50,6 +53,23 @@ def upsert_profile(
     else:
         for field, value in payload.model_dump().items():
             setattr(profile, field, value)
+
+    today_weight = db.scalar(
+        select(WeightEntry).where(
+            WeightEntry.user_id == current_user.id,
+            WeightEntry.measured_on == date.today(),
+        )
+    )
+    if today_weight is None:
+        db.add(
+            WeightEntry(
+                user_id=current_user.id,
+                measured_on=date.today(),
+                weight_kg=payload.weight_kg,
+            )
+        )
+    else:
+        today_weight.weight_kg = payload.weight_kg
 
     db.commit()
     db.refresh(profile)

@@ -200,6 +200,23 @@ class ActivityLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class WeightEntry(Base):
+    __tablename__ = "weight_entries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "measured_on", name="uq_weight_user_date"),
+        CheckConstraint("weight_kg > 0", name="ck_weight_entry_weight"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    measured_on: Mapped[date] = mapped_column(Date)
+    weight_kg: Mapped[float] = mapped_column(Numeric(5, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class SavedMeal(Base):
     __tablename__ = "saved_meals"
     __table_args__ = (

@@ -208,6 +208,19 @@ class DailyDashboardResponse(BaseModel):
     activity_logs: list[ActivityLogResponse]
 
 
+class WeightEntryUpsert(BaseModel):
+    weight_kg: float = Field(gt=20, le=400)
+
+
+class WeightEntryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    measured_on: date
+    weight_kg: float
+    created_at: datetime
+
+
 class SavedMealItemCreate(BaseModel):
     food_id: int
     grams: float = Field(gt=0, le=10000)
