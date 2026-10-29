@@ -1,10 +1,22 @@
 from datetime import date
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
-from app.calculations import calculate_age, calculate_bmr, calculate_tdee, scale_nutrition
+from app.calculations import (
+    calculate_age,
+    calculate_bmr,
+    calculate_macro_percentages,
+    calculate_tdee,
+    scale_nutrition,
+)
 from app.dependencies import CurrentUser, DbSession
 from app.models import Food, FoodLog, HealthProfile
-from app.schemas import DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse
+from app.schemas import (
+    DailyDashboardResponse,
+    FoodLogCreate,
+    FoodLogResponse,
+    FoodResponse,
+    MacroSummary,
+)
 
 
 router = APIRouter(tags=["tracking"])
@@ -129,6 +141,12 @@ def daily_dashboard(
         if calorie_target is not None
         else None
     )
+    protein_g = round(sum(float(item.protein_g) for item in food_logs), 2)
+    carb_g = round(sum(float(item.carb_g) for item in food_logs), 2)
+    fat_g = round(sum(float(item.fat_g) for item in food_logs), 2)
+    protein_pct, carb_pct, fat_pct = calculate_macro_percentages(
+        protein_g, carb_g, fat_g
+    )
     return DailyDashboardResponse(
         date=selected_date,
         calories_consumed=consumed,
@@ -137,5 +155,13 @@ def daily_dashboard(
         calorie_target=calorie_target,
         calories_remaining=calories_remaining,
         water_ml=water_ml,
+        macros=MacroSummary(
+            protein_g=protein_g,
+            carb_g=carb_g,
+            fat_g=fat_g,
+            protein_pct=protein_pct,
+            carb_pct=carb_pct,
+            fat_pct=fat_pct,
+        ),
         food_logs=[FoodLogResponse.model_validate(item) for item in food_logs],
     )

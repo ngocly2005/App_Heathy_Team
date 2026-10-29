@@ -109,6 +109,15 @@ class FoodLogResponse(BaseModel):
     created_at: datetime
 
 
+class MacroSummary(BaseModel):
+    protein_g: float
+    carb_g: float
+    fat_g: float
+    protein_pct: float
+    carb_pct: float
+    fat_pct: float
+
+
 class DailyDashboardResponse(BaseModel):
     date: date
     calories_consumed: float
@@ -117,6 +126,7 @@ class DailyDashboardResponse(BaseModel):
     calorie_target: float | None
     calories_remaining: float | None
     water_ml: int
+    macros: MacroSummary
     food_logs: list[FoodLogResponse]
 
 

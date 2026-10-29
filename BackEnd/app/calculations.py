@@ -40,3 +40,21 @@ def calculate_tdee(bmr_kcal: float, activity_level: str) -> float:
 
 def scale_nutrition(per_100g: float, grams: float) -> float:
     return round(per_100g * grams / 100, 2)
+
+
+def calculate_macro_percentages(
+    protein_g: float,
+    carb_g: float,
+    fat_g: float,
+) -> tuple[float, float, float]:
+    protein_kcal = protein_g * 4
+    carb_kcal = carb_g * 4
+    fat_kcal = fat_g * 9
+    total_kcal = protein_kcal + carb_kcal + fat_kcal
+    if total_kcal == 0:
+        return 0.0, 0.0, 0.0
+    return (
+        round(protein_kcal / total_kcal * 100, 2),
+        round(carb_kcal / total_kcal * 100, 2),
+        round(fat_kcal / total_kcal * 100, 2),
+    )

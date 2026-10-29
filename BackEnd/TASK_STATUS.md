@@ -1,13 +1,13 @@
-# S1-T04 — Create food database schema and search/filtering API endpoints
+# S2-T01 — Create macro calculation and daily nutrition breakdown API
 
 Ngày chuẩn bị thực tế: 2026-10-29.
 Lịch sử phân tách lại, chưa tạo commit/push và chưa đổi ngày Git.
 
-Backlog owner theo danh sách cung cấp: Khanh (không gán Git author).
+Backlog owner theo danh sách cung cấp: Ly (không gán Git author).
 
 Trạng thái: **extracted_runtime_unverified**.
 
-GET /foods?q=; GET/POST/DELETE food logs; scale nutrition; seed demo. Food/FoodLog schema đã phải xuất hiện ở S1-T02. Lọc hiện có: tên và is_active; chưa có category hoặc khoảng calorie.
+calculate_macro_percentages (4/4/9), MacroSummary và macros trong daily dashboard. Chỉ tổng hợp dinh dưỡng đã ăn; chưa có API đặt mục tiêu gram macro riêng.
 
 ## Trạng thái cộng dồn
 
@@ -18,6 +18,8 @@ GET /foods?q=; GET/POST/DELETE food logs; scale nutrition; seed demo. Food/FoodL
 | S1-T02 | extracted_runtime_unverified |
 | S1-T03 | extracted_runtime_unverified |
 | S1-T04 | extracted_runtime_unverified |
+| S1-T05 | missing_in_source |
+| S2-T01 | extracted_runtime_unverified |
 
 `extracted_runtime_unverified`: có source đã tách, chưa xác nhận chạy API/DB/AI.
 `missing_in_source`: chưa có code, chỉ có ghi nhận thiếu; không phải tính năng đã hoàn thành.
