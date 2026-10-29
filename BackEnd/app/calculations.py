@@ -42,6 +42,15 @@ def scale_nutrition(per_100g: float, grams: float) -> float:
     return round(per_100g * grams / 100, 2)
 
 
+def calculate_activity_calories(
+    met: float,
+    weight_kg: float,
+    duration_minutes: int,
+) -> float:
+    calories_per_minute = met * 3.5 * weight_kg / 200
+    return round(calories_per_minute * duration_minutes, 2)
+
+
 def calculate_macro_percentages(
     protein_g: float,
     carb_g: float,

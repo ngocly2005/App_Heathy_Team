@@ -109,6 +109,34 @@ class FoodLogResponse(BaseModel):
     created_at: datetime
 
 
+class ActivityTypeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    met: float
+    is_active: bool
+
+
+class ActivityLogCreate(BaseModel):
+    activity_type_id: int
+    duration_minutes: int = Field(gt=0, le=1440)
+    log_date: date = Field(default_factory=date.today)
+
+
+class ActivityLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    activity_type_id: int | None
+    log_date: date
+    duration_minutes: int
+    activity_name: str
+    met_snapshot: float
+    calories_burned: float
+    created_at: datetime
+
+
 class MacroSummary(BaseModel):
     protein_g: float
     carb_g: float
@@ -128,6 +156,7 @@ class DailyDashboardResponse(BaseModel):
     water_ml: int
     macros: MacroSummary
     food_logs: list[FoodLogResponse]
+    activity_logs: list[ActivityLogResponse]
 
 
 class PhotoFoodItem(BaseModel):

@@ -2,6 +2,7 @@ from datetime import date
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 from app.calculations import (
+    calculate_activity_calories,
     calculate_age,
     calculate_bmr,
     calculate_macro_percentages,
@@ -9,8 +10,11 @@ from app.calculations import (
     scale_nutrition,
 )
 from app.dependencies import CurrentUser, DbSession
-from app.models import Food, FoodLog, HealthProfile
+from app.models import ActivityLog, ActivityType, Food, FoodLog, HealthProfile
 from app.schemas import (
+    ActivityLogCreate,
+    ActivityLogResponse,
+    ActivityTypeResponse,
     DailyDashboardResponse,
     FoodLogCreate,
     FoodLogResponse,
@@ -114,6 +118,90 @@ def delete_food_log(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get("/activity-types", response_model=list[ActivityTypeResponse])
+def list_activity_types(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> list[ActivityType]:
+    statement = (
+        select(ActivityType)
+        .where(ActivityType.is_active.is_(True))
+        .order_by(ActivityType.name)
+    )
+    return list(db.scalars(statement))
+
+
+@router.post(
+    "/activity-logs",
+    response_model=ActivityLogResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_activity_log(
+    payload: ActivityLogCreate,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> ActivityLog:
+    activity_type = db.get(ActivityType, payload.activity_type_id)
+    if activity_type is None or not activity_type.is_active:
+        raise HTTPException(status_code=404, detail="Activity type not found")
+
+    profile = db.get(HealthProfile, current_user.id)
+    if profile is None:
+        raise HTTPException(status_code=409, detail="Create a health profile first")
+
+    met = float(activity_type.met)
+    activity_log = ActivityLog(
+        user_id=current_user.id,
+        activity_type_id=activity_type.id,
+        log_date=payload.log_date,
+        duration_minutes=payload.duration_minutes,
+        activity_name=activity_type.name,
+        met_snapshot=met,
+        calories_burned=calculate_activity_calories(
+            met,
+            float(profile.weight_kg),
+            payload.duration_minutes,
+        ),
+    )
+    db.add(activity_log)
+    db.commit()
+    db.refresh(activity_log)
+    return activity_log
+
+
+@router.get("/activity-logs", response_model=list[ActivityLogResponse])
+def list_activity_logs(
+    current_user: CurrentUser,
+    db: DbSession,
+    log_date: date | None = Query(default=None, alias="date"),
+) -> list[ActivityLog]:
+    selected_date = log_date or date.today()
+    return list(
+        db.scalars(
+            select(ActivityLog)
+            .where(
+                ActivityLog.user_id == current_user.id,
+                ActivityLog.log_date == selected_date,
+            )
+            .order_by(ActivityLog.created_at, ActivityLog.id)
+        )
+    )
+
+
+@router.delete("/activity-logs/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_activity_log(
+    log_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> Response:
+    activity_log = db.get(ActivityLog, log_id)
+    if activity_log is None or activity_log.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Activity log not found")
+    db.delete(activity_log)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/dashboard/daily", response_model=DailyDashboardResponse)
 def daily_dashboard(
     current_user: CurrentUser,
@@ -129,7 +217,14 @@ def daily_dashboard(
             )
         )
     )
-    activity_logs = []
+    activity_logs = list(
+        db.scalars(
+            select(ActivityLog).where(
+                ActivityLog.user_id == current_user.id,
+                ActivityLog.log_date == selected_date,
+            )
+        )
+    )
     water_ml = 0
 
     consumed = round(sum(float(item.calories_kcal) for item in food_logs), 2)
@@ -164,4 +259,7 @@ def daily_dashboard(
             fat_pct=fat_pct,
         ),
         food_logs=[FoodLogResponse.model_validate(item) for item in food_logs],
+        activity_logs=[
+            ActivityLogResponse.model_validate(item) for item in activity_logs
+        ],
     )

@@ -130,3 +130,35 @@ class FoodLog(Base):
     carb_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
     fat_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ActivityType(Base):
+    __tablename__ = "activity_types"
+    __table_args__ = (CheckConstraint("met > 0", name="ck_activity_type_met"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    met: Mapped[float] = mapped_column(Numeric(5, 2))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+    __table_args__ = (
+        CheckConstraint("duration_minutes > 0", name="ck_activity_log_duration"),
+        CheckConstraint("met_snapshot > 0", name="ck_activity_log_met"),
+        CheckConstraint("calories_burned >= 0", name="ck_activity_log_calories"),
+        Index("ix_activity_logs_user_date", "user_id", "log_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    activity_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("activity_types.id", ondelete="SET NULL")
+    )
+    log_date: Mapped[date] = mapped_column(Date)
+    duration_minutes: Mapped[int] = mapped_column(Integer)
+    activity_name: Mapped[str] = mapped_column(String(120))
+    met_snapshot: Mapped[float] = mapped_column(Numeric(5, 2))
+    calories_burned: Mapped[float] = mapped_column(Numeric(9, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
