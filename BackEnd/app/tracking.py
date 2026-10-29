@@ -1,6 +1,7 @@
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from app.calculations import (
     calculate_activity_calories,
     calculate_age,
@@ -10,7 +11,16 @@ from app.calculations import (
     scale_nutrition,
 )
 from app.dependencies import CurrentUser, DbSession
-from app.models import ActivityLog, ActivityType, Food, FoodLog, HealthProfile
+from app.models import (
+    ActivityLog,
+    ActivityType,
+    Food,
+    FoodLog,
+    HealthProfile,
+    User,
+    WaterLog,
+    WaterSettings,
+)
 from app.schemas import (
     ActivityLogCreate,
     ActivityLogResponse,
@@ -20,6 +30,12 @@ from app.schemas import (
     FoodLogResponse,
     FoodResponse,
     MacroSummary,
+    WaterAdjustmentResponse,
+    WaterLogAdjust,
+    WaterLogCreate,
+    WaterLogResponse,
+    WaterSettingsResponse,
+    WaterSettingsUpdate,
 )
 
 
@@ -114,6 +130,147 @@ def delete_food_log(
     if food_log is None or food_log.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Food log not found")
     db.delete(food_log)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _lock_water_user(db: DbSession, user_id: int) -> None:
+    # A stable per-user lock also serializes an empty day and first-time settings.
+    # Every water write takes this lock before reading or changing water rows.
+    locked_id = db.scalar(select(User.id).where(User.id == user_id).with_for_update())
+    if locked_id is None:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+
+def _water_settings_response(db: DbSession, user_id: int) -> WaterSettingsResponse:
+    settings = db.get(WaterSettings, user_id)
+    override = settings.target_ml if settings is not None else None
+    target = 2000
+    if override is not None:
+        target = override
+    else:
+        profile = db.get(HealthProfile, user_id)
+        if profile is not None:
+            bonus = {"moderate": 300, "very_active": 500}.get(profile.activity_level, 0)
+            calculated = Decimal(str(profile.weight_kg)) * 35 + bonus
+            rounded_ml = int(calculated.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            target = max(1500, min(4500, rounded_ml))
+    return WaterSettingsResponse(
+        target_ml=target,
+        override_target_ml=override,
+        serving_ml=settings.serving_ml if settings is not None else 200,
+        source="custom" if override is not None else "automatic",
+    )
+
+
+@router.get("/water-settings", response_model=WaterSettingsResponse)
+def get_water_settings(current_user: CurrentUser, db: DbSession) -> WaterSettingsResponse:
+    # Reading defaults must not create a row or require a write transaction.
+    return _water_settings_response(db, current_user.id)
+
+
+@router.put("/water-settings", response_model=WaterSettingsResponse)
+def update_water_settings(
+    payload: WaterSettingsUpdate, current_user: CurrentUser, db: DbSession
+) -> WaterSettingsResponse:
+    _lock_water_user(db, current_user.id)
+    settings = db.get(WaterSettings, current_user.id)
+    if settings is None:
+        settings = WaterSettings(user_id=current_user.id)
+        db.add(settings)
+    settings.target_ml = payload.target_ml
+    settings.serving_ml = payload.serving_ml
+    db.flush()
+    response = _water_settings_response(db, current_user.id)
+    db.commit()
+    return response
+
+
+@router.post("/water-logs/adjust", response_model=WaterAdjustmentResponse)
+def adjust_water_logs(
+    payload: WaterLogAdjust, current_user: CurrentUser, db: DbSession
+) -> WaterAdjustmentResponse:
+    _lock_water_user(db, current_user.id)
+    logs = list(
+        db.scalars(
+            select(WaterLog)
+            .where(WaterLog.user_id == current_user.id, WaterLog.log_date == payload.log_date)
+            .order_by(WaterLog.created_at.desc(), WaterLog.id.desc())
+            .with_for_update()
+        )
+    )
+    total = sum(log.amount_ml for log in logs)
+    applied = payload.amount_ml if payload.amount_ml > 0 else -min(-payload.amount_ml, total)
+    if applied > 0:
+        db.add(WaterLog(user_id=current_user.id, log_date=payload.log_date, amount_ml=applied))
+    elif applied < 0:
+        remaining = -applied
+        for log in logs:
+            if remaining == 0:
+                break
+            consumed = min(log.amount_ml, remaining)
+            remaining -= consumed
+            if consumed == log.amount_ml:
+                db.delete(log)
+            else:
+                log.amount_ml -= consumed
+    db.commit()
+    return WaterAdjustmentResponse(
+        date=payload.log_date, water_ml=total + applied, applied_amount_ml=applied
+    )
+
+
+@router.post(
+    "/water-logs",
+    response_model=WaterLogResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_water_log(
+    payload: WaterLogCreate,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> WaterLogResponse:
+    _lock_water_user(db, current_user.id)
+    water_log = WaterLog(user_id=current_user.id, **payload.model_dump())
+    db.add(water_log)
+    # Snapshot before releasing the user lock: a subsequent decrement may delete
+    # this row immediately, so refreshing after commit can race with that request.
+    db.flush()
+    response = WaterLogResponse.model_validate(water_log)
+    db.commit()
+    return response
+
+
+@router.get("/water-logs", response_model=list[WaterLogResponse])
+def list_water_logs(
+    current_user: CurrentUser,
+    db: DbSession,
+    log_date: date | None = Query(default=None, alias="date"),
+) -> list[WaterLog]:
+    selected_date = log_date or date.today()
+    return list(
+        db.scalars(
+            select(WaterLog)
+            .where(
+                WaterLog.user_id == current_user.id,
+                WaterLog.log_date == selected_date,
+            )
+            .order_by(WaterLog.created_at, WaterLog.id)
+        )
+    )
+
+
+@router.delete("/water-logs/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_water_log(
+    log_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> Response:
+    _lock_water_user(db, current_user.id)
+    water_log = db.get(WaterLog, log_id)
+    if water_log is None or water_log.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Water log not found")
+    db.delete(water_log)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -225,7 +382,15 @@ def daily_dashboard(
             )
         )
     )
-    water_ml = 0
+    water_ml = int(
+        db.scalar(
+            select(func.coalesce(func.sum(WaterLog.amount_ml), 0)).where(
+                WaterLog.user_id == current_user.id,
+                WaterLog.log_date == selected_date,
+            )
+        )
+        or 0
+    )
 
     consumed = round(sum(float(item.calories_kcal) for item in food_logs), 2)
     burned = round(sum(float(item.calories_burned) for item in activity_logs), 2)

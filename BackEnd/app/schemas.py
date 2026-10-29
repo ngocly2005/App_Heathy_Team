@@ -109,6 +109,55 @@ class FoodLogResponse(BaseModel):
     created_at: datetime
 
 
+class WaterSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # PUT replaces both preferences; send null explicitly to use automatic mode.
+    target_ml: int | None = Field(ge=1000, le=4500, strict=True)
+    serving_ml: Literal[200, 500]
+
+
+class WaterSettingsResponse(BaseModel):
+    target_ml: int
+    override_target_ml: int | None
+    serving_ml: Literal[200, 500]
+    source: Literal["automatic", "custom"]
+
+
+class WaterLogAdjust(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount_ml: int = Field(strict=True)
+    log_date: date = Field(default_factory=date.today)
+
+    @field_validator("amount_ml")
+    @classmethod
+    def amount_must_be_a_serving(cls, amount_ml: int) -> int:
+        if amount_ml not in (-500, -200, 200, 500):
+            raise ValueError("Amount must be -500, -200, 200 or 500 ml")
+        return amount_ml
+
+
+class WaterAdjustmentResponse(BaseModel):
+    date: date
+    water_ml: int
+    applied_amount_ml: int
+
+
+class WaterLogCreate(BaseModel):
+    amount_ml: int = Field(gt=0, le=5000)
+    log_date: date = Field(default_factory=date.today)
+
+
+class WaterLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    log_date: date
+    amount_ml: int
+    created_at: datetime
+
+
 class ActivityTypeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
