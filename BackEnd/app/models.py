@@ -198,3 +198,47 @@ class ActivityLog(Base):
     met_snapshot: Mapped[float] = mapped_column(Numeric(5, 2))
     calories_burned: Mapped[float] = mapped_column(Numeric(9, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class SavedMeal(Base):
+    __tablename__ = "saved_meals"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_saved_meal_user_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class SavedMealItem(Base):
+    __tablename__ = "saved_meal_items"
+    __table_args__ = (
+        CheckConstraint("grams > 0", name="ck_saved_meal_item_grams"),
+        CheckConstraint("calories_per_100g >= 0", name="ck_saved_item_calories"),
+        CheckConstraint("protein_per_100g >= 0", name="ck_saved_item_protein"),
+        CheckConstraint("carb_per_100g >= 0", name="ck_saved_item_carbs"),
+        CheckConstraint("fat_per_100g >= 0", name="ck_saved_item_fat"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    saved_meal_id: Mapped[int] = mapped_column(
+        ForeignKey("saved_meals.id", ondelete="CASCADE"),
+        index=True,
+    )
+    food_id: Mapped[int | None] = mapped_column(
+        ForeignKey("foods.id", ondelete="SET NULL")
+    )
+    food_name: Mapped[str] = mapped_column(String(160))
+    grams: Mapped[float] = mapped_column(Numeric(8, 2))
+    calories_per_100g: Mapped[float] = mapped_column(Numeric(8, 2))
+    protein_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    carb_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    fat_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)

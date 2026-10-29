@@ -208,6 +208,51 @@ class DailyDashboardResponse(BaseModel):
     activity_logs: list[ActivityLogResponse]
 
 
+class SavedMealItemCreate(BaseModel):
+    food_id: int
+    grams: float = Field(gt=0, le=10000)
+
+
+class SavedMealCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    items: list[SavedMealItemCreate] = Field(min_length=1, max_length=30)
+
+
+class SavedMealUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    items: list[SavedMealItemCreate] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=30,
+    )
+
+
+class SavedMealItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    food_id: int | None
+    food_name: str
+    grams: float
+    calories_per_100g: float
+    protein_per_100g: float
+    carb_per_100g: float
+    fat_per_100g: float
+
+
+class SavedMealResponse(BaseModel):
+    id: int
+    name: str
+    items: list[SavedMealItemResponse]
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedMealLogRequest(BaseModel):
+    meal_type: MealType
+    log_date: date = Field(default_factory=date.today)
+
+
 class PhotoFoodItem(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
