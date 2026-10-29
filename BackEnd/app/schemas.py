@@ -100,3 +100,35 @@ class DailyDashboardResponse(BaseModel):
     calories_remaining: float | None
     water_ml: int
     food_logs: list[FoodLogResponse]
+
+
+class PhotoFoodItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    name: str = Field(min_length=1, max_length=160)
+    estimated_grams: float = Field(gt=0, le=10000)
+    calories_kcal: float = Field(ge=0, le=20000)
+    protein_g: float = Field(ge=0, le=2000)
+    carb_g: float = Field(ge=0, le=3000)
+    fat_g: float = Field(ge=0, le=2000)
+    confidence: float = Field(ge=0, le=1)
+
+
+class PhotoAnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[PhotoFoodItem] = Field(max_length=20)
+    notes: str
+    disclaimer: str
+
+
+class PhotoConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[PhotoFoodItem] = Field(min_length=1, max_length=20)
+    meal_type: MealType
+    log_date: date = Field(default_factory=date.today)
+
+
+class PhotoConfirmResponse(BaseModel):
+    created_logs: list[FoodLogResponse]

@@ -1,5 +1,6 @@
 from functools import lru_cache
-from pydantic import model_validator
+
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,9 @@ class Settings(BaseSettings):
     access_token_minutes: int = 30
     refresh_token_days: int = 30
     google_web_client_id: str | None = None
+    groq_api_key: SecretStr | None = None
+    groq_model: str = "qwen/qwen3.8-27b"
+    max_image_size_mb: int = Field(default=8, ge=1, le=20)
 
     model_config = SettingsConfigDict(
         env_file=".env",
