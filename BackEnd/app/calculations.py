@@ -36,3 +36,7 @@ def calculate_bmr(
 
 def calculate_tdee(bmr_kcal: float, activity_level: str) -> float:
     return round(bmr_kcal * ACTIVITY_FACTORS[activity_level], 2)
+
+
+def scale_nutrition(per_100g: float, grams: float) -> float:
+    return round(per_100g * grams / 100, 2)

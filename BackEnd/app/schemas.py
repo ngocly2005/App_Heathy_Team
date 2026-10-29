@@ -75,6 +75,24 @@ class ProfileResponse(BaseModel):
 MealType = Literal["breakfast", "lunch", "dinner", "snack"]
 
 
+class FoodResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    calories_per_100g: float
+    protein_per_100g: float
+    carb_per_100g: float
+    fat_per_100g: float
+
+
+class FoodLogCreate(BaseModel):
+    food_id: int
+    grams: float = Field(gt=0, le=10000)
+    meal_type: MealType
+    log_date: date = Field(default_factory=date.today)
+
+
 class FoodLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

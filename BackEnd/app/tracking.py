@@ -1,10 +1,10 @@
 from datetime import date
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
-from app.calculations import calculate_age, calculate_bmr, calculate_tdee
+from app.calculations import calculate_age, calculate_bmr, calculate_tdee, scale_nutrition
 from app.dependencies import CurrentUser, DbSession
-from app.models import FoodLog, HealthProfile
-from app.schemas import DailyDashboardResponse, FoodLogResponse
+from app.models import Food, FoodLog, HealthProfile
+from app.schemas import DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse
 
 
 router = APIRouter(tags=["tracking"])
@@ -22,6 +22,84 @@ def get_calorie_target(db: DbSession, user_id: int) -> float | None:
         profile.sex,
     )
     return calculate_tdee(bmr, profile.activity_level)
+
+
+@router.get("/foods", response_model=list[FoodResponse])
+def list_foods(
+    current_user: CurrentUser,
+    db: DbSession,
+    query: str | None = Query(default=None, alias="q", max_length=100),
+) -> list[Food]:
+    statement = select(Food).where(Food.is_active.is_(True))
+    if query:
+        statement = statement.where(Food.name.icontains(query, autoescape=True))
+    return list(db.scalars(statement.order_by(Food.name).limit(50)))
+
+
+@router.post(
+    "/food-logs",
+    response_model=FoodLogResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_food_log(
+    payload: FoodLogCreate,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> FoodLog:
+    food = db.get(Food, payload.food_id)
+    if food is None or not food.is_active:
+        raise HTTPException(status_code=404, detail="Food not found")
+
+    grams = payload.grams
+    food_log = FoodLog(
+        user_id=current_user.id,
+        food_id=food.id,
+        log_date=payload.log_date,
+        meal_type=payload.meal_type,
+        grams=grams,
+        food_name=food.name,
+        calories_kcal=scale_nutrition(float(food.calories_per_100g), grams),
+        protein_g=scale_nutrition(float(food.protein_per_100g), grams),
+        carb_g=scale_nutrition(float(food.carb_per_100g), grams),
+        fat_g=scale_nutrition(float(food.fat_per_100g), grams),
+    )
+    db.add(food_log)
+    db.commit()
+    db.refresh(food_log)
+    return food_log
+
+
+@router.get("/food-logs", response_model=list[FoodLogResponse])
+def list_food_logs(
+    current_user: CurrentUser,
+    db: DbSession,
+    log_date: date | None = Query(default=None, alias="date"),
+) -> list[FoodLog]:
+    selected_date = log_date or date.today()
+    return list(
+        db.scalars(
+            select(FoodLog)
+            .where(
+                FoodLog.user_id == current_user.id,
+                FoodLog.log_date == selected_date,
+            )
+            .order_by(FoodLog.created_at, FoodLog.id)
+        )
+    )
+
+
+@router.delete("/food-logs/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_food_log(
+    log_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> Response:
+    food_log = db.get(FoodLog, log_id)
+    if food_log is None or food_log.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Food log not found")
+    db.delete(food_log)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/dashboard/daily", response_model=DailyDashboardResponse)
