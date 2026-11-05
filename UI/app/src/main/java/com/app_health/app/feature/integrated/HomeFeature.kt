@@ -7,6 +7,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.app_health.app.feature.home.components.Home.CalorieRing
+import com.app_health.app.feature.home.components.Home.WeeklyCalendarSwipeable
 import java.time.LocalDate
 
 fun homeFeature() = AppFeature("home", "Trang chủ", load = { vm, ctx ->
@@ -27,6 +28,7 @@ fun DateStrip(vm: AppViewModel) {
         }
         TextButton(onClick = { vm.chooseDate(state.date.plusDays(1)) }, enabled = enabled && state.date < LocalDate.now()) { Text("›") }
     }
+    WeeklyCalendarSwipeable(selectedDate=state.date,onDateSelected={if(enabled)vm.chooseDate(it)})
 }
 
 @Composable
