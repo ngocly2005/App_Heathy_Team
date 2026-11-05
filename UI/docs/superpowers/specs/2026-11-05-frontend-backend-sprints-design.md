@@ -2,6 +2,9 @@
 
 Ngày: 2026-11-05 (UTC+7).
 
+Người dùng đã yêu cầu triển khai và bỏ qua các bước duyệt tiếp của skill brainstorming.
+Trạng thái hiện tại xem README và docs/VALIDATION.md; đây là bản thiết kế ban đầu.
+
 Phương án tích hợp đã được người dùng duyệt trong chat, gồm Google Sign-in và
 React Admin tại `Heathy_Team/admin-web`. Tài liệu này cụ thể hóa phương án để
 người dùng xem trước khi lập kế hoạch thực thi. Đây là thiết kế, chưa phải báo
