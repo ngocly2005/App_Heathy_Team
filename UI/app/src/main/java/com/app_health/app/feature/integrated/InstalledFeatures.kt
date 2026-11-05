@@ -7,4 +7,4 @@ data class AppFeature(val route: String, val title: String,
     val screen: @Composable (AppViewModel, (String) -> Unit) -> Unit)
 
 // Each task registers its screen here when that checkpoint is implemented.
-fun installedFeatures(): List<AppFeature> = listOf(homeFeature(), profileFeature(), photoFeature(), foodFeature(), macroFeature(), activityFeature(), waterFeature())
+fun installedFeatures(): List<AppFeature> = listOf(homeFeature(), profileFeature(), photoFeature(), foodFeature(), macroFeature(), activityFeature(), waterFeature(), mealsFeature())
