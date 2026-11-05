@@ -57,6 +57,7 @@ fun HomeScreen(vm: AppViewModel, navigate: (String) -> Unit) {
                 Text("${day.food_logs.size} món ăn • ${day.activity_logs.size} hoạt động")
                 Text("Nước: ${day.water_ml} ml")
             }
+            MacroOverview(state)
             if (day.food_logs.isNotEmpty()) Panel("Bữa ăn gần đây") {
                 day.food_logs.takeLast(4).forEach { Text("${it.food_name} • ${it.grams.display()} g • ${it.calories_kcal.display()} kcal") }
             }
