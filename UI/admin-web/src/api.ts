@@ -1,4 +1,6 @@
 import { HttpError, type AuthProvider, type DataProvider } from 'react-admin';
+import { disableGoogleAutoSelect } from './googleSignIn.mjs';
+import { loginAdmin } from './adminAuth.mjs';
 
 const origin = new URL(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000');
 if (!['http:', 'https:'].includes(origin.protocol) || origin.pathname !== '/' || origin.username || origin.password || origin.search || origin.hash) {
@@ -70,18 +72,13 @@ export async function api(path: string, init: RequestInit = {}, retry = true): P
 }
 
 export const authProvider: AuthProvider = {
-    login: async ({ credential }: { credential: string }) => {
-        const tokens: Tokens = await json(await raw('/auth/google', { method: 'POST', body: JSON.stringify({ id_token: credential }) }));
-        const user: User = await json(await raw('/auth/me', { headers: { Authorization: `Bearer ${tokens.access_token}` } }));
-        if (user.role !== 'admin' || user.status !== 'active') {
-            await raw('/auth/logout', { method: 'POST', body: JSON.stringify({ refresh_token: tokens.refresh_token }) }).catch(() => undefined);
-            throw new Error('Tài khoản này chưa được cấp quyền quản trị.');
-        }
-        save({ ...tokens, user });
-    },
+    login: async (input: { credential?: string; email?: string; password?: string }) =>
+        loginAdmin(input, async (path, init) => json(await raw(path, init)), save,
+            () => disableGoogleAutoSelect(window.google?.accounts?.id)),
     logout: async () => {
         const previous = session();
         clear();
+        disableGoogleAutoSelect(window.google?.accounts?.id);
         if (previous) await raw('/auth/logout', { method: 'POST', body: JSON.stringify({ refresh_token: previous.refresh_token }) }).catch(() => undefined);
         return '/login';
     },

@@ -21,6 +21,7 @@ import com.app_health.app.core.network.AppContainer
 import com.app_health.app.core.session.AuthState
 import com.app_health.app.feature.auth.AuthViewModel
 import com.app_health.app.feature.auth.ConnectedSignInScreen
+import com.app_health.app.feature.adminconnected.ConnectedAdminScreen
 import com.app_health.app.core.designsystem.components.AppBottomNavigation
 import com.app_health.app.core.designsystem.components.BottomNavRoute
 
@@ -46,7 +47,10 @@ fun ConnectedApp() {
             }
             DisposableEffect(vm) { vm.activate(); onDispose { vm.releaseIfSessionChanged() } }
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { auth.refreshIdentity() }
-            ConnectedShell(vm, onOpenAdmin = {}, onRefreshIdentity = { auth.refreshIdentity() }, authBusy = authUi.busy)
+            if (adminOpen && current.user.role == "admin") ConnectedAdminScreen(container = container,
+                onExit = { adminOpen = false; vm.refresh() },
+                onLogout = { auth.logout() })
+            else ConnectedShell(vm, onOpenAdmin = { adminOpen = true }, onRefreshIdentity = { auth.refreshIdentity() }, authBusy = authUi.busy)
         }
     }
 }
