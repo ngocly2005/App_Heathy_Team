@@ -2,7 +2,7 @@ from app.core.dates import today as business_today
 from datetime import date
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
-from app.calculations import calculate_activity_calories, calculate_age, calculate_bmr, calculate_macro_percentages, calculate_tdee, scale_nutrition
+from app.calculations import calculate_activity_calories, calculate_macro_percentages, scale_nutrition
 from app.dependencies import CurrentUser, DbSession
 from app.models import ActivityLog, ActivityType, Food, FoodLog, HealthProfile, User, WaterLog
 from app.schemas import ActivityLogCreate, ActivityLogResponse, ActivityTypeResponse, DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse, MacroSummary, WaterLogCreate, WaterLogResponse
@@ -15,17 +15,8 @@ router = APIRouter(tags=["tracking"])
 
 
 def get_calorie_target(db: DbSession, user_id: int) -> float | None:
-    profile = db.get(HealthProfile, user_id)
-    if profile is None:
-        return None
-    age = calculate_age(profile.birth_date)
-    bmr = calculate_bmr(
-        float(profile.weight_kg),
-        float(profile.height_cm),
-        age,
-        profile.sex,
-    )
-    return calculate_tdee(bmr, profile.activity_level)
+    from app.settings import calorie_target
+    return calorie_target(db, user_id)
 
 
 @router.get("/foods", response_model=list[FoodResponse])

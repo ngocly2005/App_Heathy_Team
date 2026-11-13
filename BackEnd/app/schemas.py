@@ -1,6 +1,7 @@
 from app.core.dates import today as business_today
 from datetime import date, datetime
 from typing import Literal
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -315,6 +316,21 @@ class WaterAdjustmentResponse(BaseModel):
     date: date
     water_ml: int
     applied_amount_ml: int
+
+
+class NutritionSettingsUpsert(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+    calorie_target: float | None = Field(default=None, ge=500, le=10000)
+    protein_pct: int = Field(default=25, ge=0, le=100)
+    carb_pct: int = Field(default=50, ge=0, le=100)
+    fat_pct: int = Field(default=25, ge=0, le=100)
+    target_weight_kg: float | None = Field(default=None, gt=20, le=400)
+
+    @model_validator(mode="after")
+    def percentages_sum_to_100(self):
+        if self.protein_pct + self.carb_pct + self.fat_pct != 100:
+            raise ValueError("Macro percentages must add to 100")
+        return self
 
 
 class AIInteractionResponse(BaseModel):

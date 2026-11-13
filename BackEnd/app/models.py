@@ -261,6 +261,21 @@ class WaterSettings(Base):
     )
 
 
+class NutritionSettings(Base):
+    __tablename__ = "nutrition_settings"
+    __table_args__ = (
+        CheckConstraint("calorie_target IS NULL OR (calorie_target >= 500 AND calorie_target <= 10000)", name="ck_nutrition_calorie"),
+        CheckConstraint("protein_pct >= 0 AND carb_pct >= 0 AND fat_pct >= 0 AND protein_pct + carb_pct + fat_pct = 100", name="ck_nutrition_macro"),
+        CheckConstraint("target_weight_kg IS NULL OR (target_weight_kg > 20 AND target_weight_kg <= 400)", name="ck_nutrition_weight"),
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    calorie_target: Mapped[float | None] = mapped_column(Numeric(8, 2))
+    protein_pct: Mapped[int] = mapped_column(Integer, default=25, server_default="25")
+    carb_pct: Mapped[int] = mapped_column(Integer, default=50, server_default="50")
+    fat_pct: Mapped[int] = mapped_column(Integer, default=25, server_default="25")
+    target_weight_kg: Mapped[float | None] = mapped_column(Numeric(5, 2))
+
+
 class AIInteraction(Base):
     __tablename__ = "ai_interactions"
     __table_args__ = (
