@@ -2,13 +2,13 @@ from app.core.dates import today as business_today
 from datetime import date
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
-from app.calculations import calculate_activity_calories, calculate_macro_percentages, scale_nutrition
+from app.calculations import calculate_macro_percentages, scale_nutrition
 from app.dependencies import CurrentUser, DbSession
 from app.models import ActivityLog, ActivityType, Food, FoodLog, HealthProfile, User, WaterLog
-from app.schemas import ActivityLogCreate, ActivityLogResponse, ActivityTypeResponse, DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse, MacroSummary, WaterLogCreate, WaterLogResponse
+from app.schemas import ActivityLogResponse, ActivityTypeResponse, DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse, MacroSummary, WaterLogCreate, WaterLogResponse
 from decimal import ROUND_HALF_UP, Decimal
 from app.models import ActivityLog, ActivityType, Food, FoodLog, HealthProfile, User, WaterLog, WaterSettings
-from app.schemas import ActivityLogCreate, ActivityLogResponse, ActivityTypeResponse, DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse, MacroSummary, WaterAdjustmentResponse, WaterLogAdjust, WaterLogCreate, WaterLogResponse, WaterSettingsResponse, WaterSettingsUpdate
+from app.schemas import ActivityLogResponse, ActivityTypeResponse, DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse, MacroSummary, WaterAdjustmentResponse, WaterLogAdjust, WaterLogCreate, WaterLogResponse, WaterSettingsResponse, WaterSettingsUpdate
 
 
 router = APIRouter(tags=["tracking"])
@@ -321,74 +321,3 @@ def adjust_water_logs(
     return WaterAdjustmentResponse(
         date=payload.log_date, water_ml=total + applied, applied_amount_ml=applied
     )
-
-
-@router.post(
-    "/activity-logs",
-    response_model=ActivityLogResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_activity_log(
-    payload: ActivityLogCreate,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> ActivityLog:
-    activity_type = db.get(ActivityType, payload.activity_type_id)
-    if activity_type is None or not activity_type.is_active:
-        raise HTTPException(status_code=404, detail="Activity type not found")
-
-    profile = db.get(HealthProfile, current_user.id)
-    if profile is None:
-        raise HTTPException(status_code=409, detail="Create a health profile first")
-
-    met = float(activity_type.met)
-    activity_log = ActivityLog(
-        user_id=current_user.id,
-        activity_type_id=activity_type.id,
-        log_date=payload.log_date,
-        duration_minutes=payload.duration_minutes,
-        activity_name=activity_type.name,
-        met_snapshot=met,
-        calories_burned=calculate_activity_calories(
-            met,
-            float(profile.weight_kg),
-            payload.duration_minutes,
-        ),
-    )
-    db.add(activity_log)
-    db.commit()
-    db.refresh(activity_log)
-    return activity_log
-
-
-@router.get("/activity-logs", response_model=list[ActivityLogResponse])
-def list_activity_logs(
-    current_user: CurrentUser,
-    db: DbSession,
-    log_date: date | None = Query(default=None, alias="date"),
-) -> list[ActivityLog]:
-    selected_date = log_date or date.today()
-    return list(
-        db.scalars(
-            select(ActivityLog)
-            .where(
-                ActivityLog.user_id == current_user.id,
-                ActivityLog.log_date == selected_date,
-            )
-            .order_by(ActivityLog.created_at, ActivityLog.id)
-        )
-    )
-
-
-@router.delete("/activity-logs/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_activity_log(
-    log_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> Response:
-    activity_log = db.get(ActivityLog, log_id)
-    if activity_log is None or activity_log.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Activity log not found")
-    db.delete(activity_log)
-    db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)

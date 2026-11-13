@@ -169,7 +169,7 @@ class ActivityTypeResponse(BaseModel):
 class ActivityLogCreate(BaseModel):
     activity_type_id: int
     duration_minutes: int = Field(gt=0, le=1440)
-    log_date: date = Field(default_factory=date.today)
+    log_date: date = Field(default_factory=business_today)
 
 
 class ActivityLogResponse(BaseModel):
