@@ -56,7 +56,7 @@ class HealthProfile(Base):
         CheckConstraint("height_cm > 0", name="ck_health_profile_height"),
         CheckConstraint("weight_kg > 0", name="ck_health_profile_weight"),
         CheckConstraint(
-            "activity_level IN ('sedentary', 'light', 'moderate', 'very_active')",
+            "activity_level IN ('sedentary', 'light', 'moderate', 'very_active', 'extra_active')",
             name="ck_health_profile_activity",
         ),
         CheckConstraint(

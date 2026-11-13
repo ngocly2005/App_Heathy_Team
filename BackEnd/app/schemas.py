@@ -1,3 +1,4 @@
+from app.core.dates import today as business_today
 from datetime import date, datetime
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
@@ -65,7 +66,7 @@ class MessageResponse(BaseModel):
 Sex = Literal["male", "female"]
 
 
-ActivityLevel = Literal["sedentary", "light", "moderate", "very_active"]
+ActivityLevel = Literal["sedentary", "light", "moderate", "very_active", "extra_active"]
 
 
 HealthGoal = Literal["lose", "maintain", "gain"]
@@ -82,7 +83,7 @@ class ProfileUpsert(BaseModel):
     @field_validator("birth_date")
     @classmethod
     def birth_date_must_be_in_the_past(cls, birth_date: date) -> date:
-        if birth_date >= date.today():
+        if birth_date >= business_today():
             raise ValueError("Birth date must be in the past")
         return birth_date
 
