@@ -1,7 +1,8 @@
 from datetime import UTC, date, datetime
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, UniqueConstraint, Numeric, String
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, UniqueConstraint, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, UniqueConstraint, Numeric, String
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 
 
@@ -258,3 +259,21 @@ class WaterSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class AIInteraction(Base):
+    __tablename__ = "ai_interactions"
+    __table_args__ = (
+        CheckConstraint("kind IN ('chat', 'photo')", name="ck_ai_kind"),
+        CheckConstraint("status IN ('success', 'error')", name="ck_ai_status"),
+        Index("ix_ai_user_created", "user_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(10))
+    context_date: Mapped[date] = mapped_column(Date)
+    question: Mapped[str | None] = mapped_column(Text)
+    response: Mapped[dict | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(10))
+    error_code: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

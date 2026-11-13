@@ -1,18 +1,29 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from app.core.dates import today as business_today
+from datetime import date
+from fastapi import APIRouter, File, HTTPException, UploadFile, Query, status
 from app.core.config import get_settings
 from app.core.groq_client import ask_groq
 from app.core.images import validate_image
 from app.dependencies import CurrentUser, DbSession
-from app.models import FoodLog
-from app.schemas import (
-    FoodLogResponse,
-    PhotoAnalysisResponse,
-    PhotoConfirmRequest,
-    PhotoConfirmResponse,
-)
+from app.models import AIInteraction, FoodLog
+from app.schemas import FoodLogResponse, PhotoAnalysisResponse, PhotoConfirmRequest, PhotoConfirmResponse
 
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+def recorded_ai(db, user_id, kind, context_date, question, operation):
+    try:
+        result = operation()
+    except HTTPException as exc:
+        db.add(AIInteraction(user_id=user_id, kind=kind, context_date=context_date,
+                            question=question, status="error", error_code=exc.status_code))
+        db.commit()
+        raise
+    db.add(AIInteraction(user_id=user_id, kind=kind, context_date=context_date,
+                        question=question, response=result.model_dump(mode="json"), status="success"))
+    db.commit()
+    return result
 
 
 PHOTO_PROMPT = """Estimate the foods visible in this image for a calorie tracker.
@@ -27,7 +38,9 @@ The user must review and confirm the estimates before any food log is saved."""
 @router.post("/photo/analyze", response_model=PhotoAnalysisResponse)
 def analyze_photo(
     current_user: CurrentUser,
+    db: DbSession,
     image: UploadFile = File(...),
+    context_date: date | None = Query(default=None, alias="date"),
 ) -> PhotoAnalysisResponse:
     max_bytes = get_settings().max_image_size_mb * 1024 * 1024
     try:
@@ -37,13 +50,9 @@ def analyze_photo(
     if len(data) > max_bytes:
         raise HTTPException(status_code=413, detail="Image exceeds size limit")
     content_type = validate_image(data, image.content_type)
-    return ask_groq(
-        system_instruction=PHOTO_PROMPT,
-        prompt="Estimate this meal.",
-        response_schema=PhotoAnalysisResponse,
-        image_data=data,
-        image_mime_type=content_type,
-    )
+    return recorded_ai(db, current_user.id, "photo", context_date or business_today(), None,
+        lambda: ask_groq(system_instruction=PHOTO_PROMPT, prompt="Estimate this meal.",
+            response_schema=PhotoAnalysisResponse, image_data=data, image_mime_type=content_type))
 
 
 @router.post(
@@ -62,6 +71,7 @@ def confirm_photo(
             food_id=None,
             log_date=payload.log_date,
             meal_type=payload.meal_type,
+            meal_time=payload.meal_time,
             grams=item.estimated_grams,
             food_name=item.name,
             calories_kcal=item.calories_kcal,

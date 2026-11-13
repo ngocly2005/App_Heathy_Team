@@ -264,10 +264,10 @@ class SavedMealLogRequest(BaseModel):
 
 
 class PhotoFoodItem(BaseModel):
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, str_strip_whitespace=True)
 
     name: str = Field(min_length=1, max_length=160)
-    estimated_grams: float = Field(gt=0, le=10000)
+    estimated_grams: float = Field(ge=0.01, le=10000)
     calories_kcal: float = Field(ge=0, le=20000)
     protein_g: float = Field(ge=0, le=2000)
     carb_g: float = Field(ge=0, le=3000)
@@ -288,7 +288,8 @@ class PhotoConfirmRequest(BaseModel):
 
     items: list[PhotoFoodItem] = Field(min_length=1, max_length=20)
     meal_type: MealType
-    log_date: date = Field(default_factory=date.today)
+    log_date: date = Field(default_factory=business_today)
+    meal_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class PhotoConfirmResponse(BaseModel):
@@ -306,6 +307,19 @@ class WaterAdjustmentResponse(BaseModel):
     date: date
     water_ml: int
     applied_amount_ml: int
+
+
+class AIInteractionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    kind: str
+    context_date: date
+    question: str | None
+    response: dict | None
+    status: str
+    error_code: int | None
+    created_at: datetime
 
 
 class WaterSettingsUpdate(BaseModel):
