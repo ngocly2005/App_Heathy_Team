@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Literal
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -10,8 +11,37 @@ class UserResponse(BaseModel):
     email: EmailStr
     full_name: str
     status: str
-    google_sub: str
+    role: str = "user"
+    google_sub: str | None
+    has_password: bool = False
     created_at: datetime
+
+
+class EmailLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+class RegisterRequest(EmailLoginRequest):
+    full_name: str = Field(min_length=1, max_length=120)
+    password: SecretStr = Field(min_length=8, max_length=128)
+
+    @field_validator("full_name", mode="before")
+    @classmethod
+    def trim_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class PasswordUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: SecretStr | None = Field(default=None, min_length=1, max_length=128)
+    new_password: SecretStr = Field(min_length=8, max_length=128)
 
 
 class GoogleLoginRequest(BaseModel):
@@ -107,41 +137,6 @@ class FoodLogResponse(BaseModel):
     carb_g: float
     fat_g: float
     created_at: datetime
-
-
-class WaterSettingsUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    # PUT replaces both preferences; send null explicitly to use automatic mode.
-    target_ml: int | None = Field(ge=1000, le=4500, strict=True)
-    serving_ml: Literal[200, 500]
-
-
-class WaterSettingsResponse(BaseModel):
-    target_ml: int
-    override_target_ml: int | None
-    serving_ml: Literal[200, 500]
-    source: Literal["automatic", "custom"]
-
-
-class WaterLogAdjust(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    amount_ml: int = Field(strict=True)
-    log_date: date = Field(default_factory=date.today)
-
-    @field_validator("amount_ml")
-    @classmethod
-    def amount_must_be_a_serving(cls, amount_ml: int) -> int:
-        if amount_ml not in (-500, -200, 200, 500):
-            raise ValueError("Amount must be -500, -200, 200 or 500 ml")
-        return amount_ml
-
-
-class WaterAdjustmentResponse(BaseModel):
-    date: date
-    water_ml: int
-    applied_amount_ml: int
 
 
 class WaterLogCreate(BaseModel):
@@ -296,3 +291,38 @@ class PhotoConfirmRequest(BaseModel):
 
 class PhotoConfirmResponse(BaseModel):
     created_logs: list[FoodLogResponse]
+
+
+class WaterSettingsResponse(BaseModel):
+    target_ml: int
+    override_target_ml: int | None
+    serving_ml: Literal[200, 500]
+    source: Literal["automatic", "custom"]
+
+
+class WaterAdjustmentResponse(BaseModel):
+    date: date
+    water_ml: int
+    applied_amount_ml: int
+
+
+class WaterSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # PUT replaces both preferences; send null explicitly to use automatic mode.
+    target_ml: int | None = Field(ge=1000, le=4500, strict=True)
+    serving_ml: Literal[200, 500]
+
+
+class WaterLogAdjust(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount_ml: int = Field(strict=True)
+    log_date: date = Field(default_factory=date.today)
+
+    @field_validator("amount_ml")
+    @classmethod
+    def amount_must_be_a_serving(cls, amount_ml: int) -> int:
+        if amount_ml not in (-500, -200, 200, 500):
+            raise ValueError("Amount must be -500, -200, 200 or 500 ml")
+        return amount_ml

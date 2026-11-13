@@ -1,29 +1,7 @@
-# S2-T05 — Create WeightLogs database schema and history tracking API
+# Mốc cập nhật S1-BL03-BE
 
-Ngày chuẩn bị thực tế: 2026-10-29.
-Lịch sử phân tách lại, chưa tạo commit/push và chưa đổi ngày Git.
+Đây là bộ cập nhật từ team repo đã có BE đến sprint 2, không dựng lại lịch sử phát triển. Các tính năng cũ được giữ. Task đã cập nhật đến mốc này:
 
-Backlog owner theo danh sách cung cấp: Ly (không gán Git author).
+- S1-BL03-BE
 
-Trạng thái: **extracted_runtime_unverified**.
-
-Model hiện tại tên WeightEntry/table weight_entries; list theo khoảng ngày, upsert/delete. Khôi phục ghi weight history từ profile; migration backfill profile hiện có.
-
-## Trạng thái cộng dồn
-
-| Task | Trạng thái |
-|---|---|
-| BASE | extracted_runtime_unverified |
-| S1-T01 | extracted_runtime_unverified |
-| S1-T02 | extracted_runtime_unverified |
-| S1-T03 | extracted_runtime_unverified |
-| S1-T04 | extracted_runtime_unverified |
-| S1-T05 | missing_in_source |
-| S2-T01 | extracted_runtime_unverified |
-| S2-T02 | extracted_runtime_unverified |
-| S2-T03 | extracted_runtime_unverified |
-| S2-T04 | extracted_runtime_unverified |
-| S2-T05 | extracted_runtime_unverified |
-
-`extracted_runtime_unverified`: có source đã tách, chưa xác nhận chạy API/DB/AI.
-`missing_in_source`: chưa có code, chỉ có ghi nhận thiếu; không phải tính năng đã hoàn thành.
+Xem docs/backlog/ và manifest để biết source/thay đổi/kiểm tra thực tế. Ngày sprint là kế hoạch.

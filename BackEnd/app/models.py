@@ -1,18 +1,8 @@
 from datetime import UTC, date, datetime
-from sqlalchemy import (
-    Boolean,
-    CheckConstraint,
-    Date,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    Numeric,
-    String,
-    UniqueConstraint,
-)
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, UniqueConstraint, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 
 
 def utc_now() -> datetime:
@@ -23,18 +13,26 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("status IN ('active', 'disabled')", name="ck_users_status"),
+        CheckConstraint("role IN ('user', 'admin')", name="ck_users_role"),
         UniqueConstraint("google_sub", name="uq_users_google_sub"),
+        CheckConstraint("google_sub IS NOT NULL OR password_hash IS NOT NULL", name="ck_users_auth_method"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True)
     full_name: Mapped[str] = mapped_column(String(120))
-    google_sub: Mapped[str] = mapped_column(String(255))
+    google_sub: Mapped[str | None] = mapped_column(String(255))
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), default="active")
+    role: Mapped[str] = mapped_column(String(20), default="user", server_default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+    @property
+    def has_password(self) -> bool:
+        return bool(self.password_hash)
 
 
 class RefreshToken(Base):
@@ -130,28 +128,6 @@ class FoodLog(Base):
     carb_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
     fat_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-
-
-class WaterSettings(Base):
-    __tablename__ = "water_settings"
-    __table_args__ = (
-        CheckConstraint(
-            "target_ml IS NULL OR target_ml BETWEEN 1000 AND 4500",
-            name="ck_water_settings_target",
-        ),
-        CheckConstraint("serving_ml IN (200, 500)", name="ck_water_settings_serving"),
-    )
-
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
-    )
-    # NULL follows the automatic target whenever the health profile changes.
-    target_ml: Mapped[int | None] = mapped_column(Integer)
-    serving_ml: Mapped[int] = mapped_column(Integer, default=200, server_default="200")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, onupdate=utc_now
-    )
 
 
 class WaterLog(Base):
@@ -259,3 +235,25 @@ class SavedMealItem(Base):
     protein_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
     carb_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
     fat_per_100g: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+
+
+class WaterSettings(Base):
+    __tablename__ = "water_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "target_ml IS NULL OR target_ml BETWEEN 1000 AND 4500",
+            name="ck_water_settings_target",
+        ),
+        CheckConstraint("serving_ml IN (200, 500)", name="ck_water_settings_serving"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    # NULL follows the automatic target whenever the health profile changes.
+    target_ml: Mapped[int | None] = mapped_column(Integer)
+    serving_ml: Mapped[int] = mapped_column(Integer, default=200, server_default="200")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )

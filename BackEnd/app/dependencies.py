@@ -37,9 +37,20 @@ def get_current_user(
         raise unauthorized() from exc
 
     user = db.get(User, user_id)
-    if user is None or user.status != "active" or not user.google_sub:
+    if user is None or user.status != "active" or not (user.google_sub or user.password_hash):
         raise unauthorized()
     return user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_admin(current_user: CurrentUser) -> User:
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin permission required")
+    return current_user
+
+
+AdminUser = Annotated[User, Depends(get_admin)]
+
+
