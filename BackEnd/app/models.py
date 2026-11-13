@@ -121,6 +121,7 @@ class FoodLog(Base):
     )
     log_date: Mapped[date] = mapped_column(Date)
     meal_type: Mapped[str] = mapped_column(String(20))
+    meal_time: Mapped[str | None] = mapped_column(String(5))
     grams: Mapped[float] = mapped_column(Numeric(8, 2))
     food_name: Mapped[str] = mapped_column(String(160))
     calories_kcal: Mapped[float] = mapped_column(Numeric(9, 2))

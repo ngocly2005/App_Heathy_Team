@@ -131,6 +131,7 @@ class FoodLogResponse(BaseModel):
     food_id: int | None
     log_date: date
     meal_type: str
+    meal_time: str | None = None
     grams: float
     food_name: str
     calories_kcal: float
