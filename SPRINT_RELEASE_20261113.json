@@ -5,7 +5,7 @@
   "base": "e69c5d968ba194018fd333cc4fd5d79c944b93ea",
   "source_heads": {
     "FE": "25f38c8aff97f9985dbcf4672f9da45bdec65019",
-    "BE": "974f8ca4b0ba0bd459af711f7812525e20ee53e3"
+    "BE": "7758f04604f65c731e282ef57f032ecf2d5acccc"
   },
   "tasks": [
     {
@@ -829,5 +829,14 @@
     "1": "51ee972fe1a1de4878d9874e4a89c54426d70ba3",
     "2": "86d58ec7868000d6d4a449b769589eb967bbc518",
     "3": "3c4550cd93f95babdc4d043412be45edba4f4d88"
-  }
+  },
+  "follow_up_fixes": [
+    {
+      "task": "S1-BL03-BE",
+      "source_head": "7758f04604f65c731e282ef57f032ecf2d5acccc",
+      "backend_tests": 27,
+      "scope": "Reject invalid Google linking proof without invalidating an active app session",
+      "git_dates_modified": false
+    }
+  ]
 }
