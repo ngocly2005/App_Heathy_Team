@@ -200,6 +200,28 @@ class WeightEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class DiaryEntry(Base):
+    __tablename__ = "diary_entries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "entry_date", name="uq_diary_user_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    entry_date: Mapped[date] = mapped_column(Date)
+    content: Mapped[str] = mapped_column(Text)
+    mood: Mapped[str | None] = mapped_column(String(30))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
 class SavedMeal(Base):
     __tablename__ = "saved_meals"
     __table_args__ = (

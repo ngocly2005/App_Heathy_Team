@@ -240,6 +240,30 @@ class WeightEntryResponse(BaseModel):
     created_at: datetime
 
 
+class DiaryUpsert(BaseModel):
+    content: str = Field(min_length=1, max_length=10000)
+    mood: str | None = Field(default=None, min_length=1, max_length=30)
+
+
+class DiaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    entry_date: date
+    content: str
+    mood: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class HistoryDetailResponse(BaseModel):
+    date: date
+    dashboard: DailyDashboardResponse
+    water_logs: list[WaterLogResponse]
+    weight: WeightEntryResponse | None
+    diary: DiaryResponse | None
+
+
 class SavedMealItemCreate(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False, str_strip_whitespace=True)
     food_id: int | None = Field(default=None, gt=0)
