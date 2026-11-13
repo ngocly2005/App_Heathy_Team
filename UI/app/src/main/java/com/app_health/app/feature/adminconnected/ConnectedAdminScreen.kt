@@ -48,7 +48,7 @@ fun ConnectedAdminScreen(container: AppContainer, onExit: () -> Unit, onLogout: 
                     AdminDeniedPanel(onExit)
                 } else {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        listOf(AdminTab.USERS, AdminTab.FOODS, AdminTab.ACTIVITIES).forEach { tab -> FilterChip(selected = state.query.tab == tab,
+                        AdminTab.entries.forEach { tab -> FilterChip(selected = state.query.tab == tab,
                             enabled = !state.busy && !state.uncertain && !state.loading,
                             onClick = { vm.select(AdminQuery(tab = tab)) }, label = { Text(tab.title) }) }
                     }

@@ -17,7 +17,7 @@ enum class AdminTab(val title: String) {
     DASHBOARD("Tổng quan"), USERS("Người dùng"), FOODS("Thực phẩm"), ACTIVITIES("Bài tập"), LOGS("Lịch sử AI")
 }
 
-data class AdminQuery(val tab: AdminTab = AdminTab.USERS, val page: Int = 1,
+data class AdminQuery(val tab: AdminTab = AdminTab.DASHBOARD, val page: Int = 1,
     val search: String = "", val status: String = "", val active: Boolean? = null,
     val from: String = LocalDate.now().minusDays(29).toString(), val to: String = LocalDate.now().toString(),
     val userId: String = "", val kind: String = "") {
