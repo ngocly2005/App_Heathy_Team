@@ -2,10 +2,8 @@ from app.core.dates import today as business_today
 from datetime import date, datetime
 from datetime import date as DateValue
 from typing import Annotated, Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator, model_validator
-from typing import Literal
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserResponse(BaseModel):
@@ -47,7 +45,6 @@ class PasswordUpdateRequest(BaseModel):
     current_password: SecretStr | None = Field(default=None, min_length=1, max_length=128)
     new_password: SecretStr = Field(min_length=8, max_length=128)
 
-
 class MealChatRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -64,7 +61,6 @@ class MealChatResponse(BaseModel):
     follow_up_questions: list[Annotated[str, Field(min_length=2, max_length=120)]] = Field(
         default_factory=list, max_length=4,
         description="Short follow-up questions the user may choose to ask next; never meal descriptions.")
-
 
 class GoogleLoginRequest(BaseModel):
     id_token: str = Field(min_length=20, max_length=10000)
@@ -85,11 +81,7 @@ class MessageResponse(BaseModel):
 
 
 Sex = Literal["male", "female"]
-
-
 ActivityLevel = Literal["sedentary", "light", "moderate", "very_active", "extra_active"]
-
-
 HealthGoal = Literal["lose", "maintain", "gain"]
 
 
@@ -343,6 +335,7 @@ class SavedMealLogRequest(BaseModel):
     meal_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
+
 class PhotoFoodItem(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, str_strip_whitespace=True)
 
@@ -428,25 +421,3 @@ class AIInteractionResponse(BaseModel):
     status: str
     error_code: int | None
     created_at: datetime
-
-
-class WaterSettingsUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    # PUT replaces both preferences; send null explicitly to use automatic mode.
-    target_ml: int | None = Field(ge=1000, le=4500, strict=True)
-    serving_ml: Literal[200, 500]
-
-
-class WaterLogAdjust(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    amount_ml: int = Field(strict=True)
-    log_date: date = Field(default_factory=date.today)
-
-    @field_validator("amount_ml")
-    @classmethod
-    def amount_must_be_a_serving(cls, amount_ml: int) -> int:
-        if amount_ml not in (-500, -200, 200, 500):
-            raise ValueError("Amount must be -500, -200, 200 or 500 ml")
-        return amount_ml

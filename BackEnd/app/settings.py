@@ -1,12 +1,12 @@
+"""Per-user nutrition and water targets, shared by all clients."""
 from fastapi import APIRouter
 from sqlalchemy import select
+
 from app.calculations import calculate_age, calculate_bmr, calculate_tdee
 from app.dependencies import CurrentUser, DbSession
 from app.models import HealthProfile, NutritionSettings, User, WaterLog, WaterSettings
-from app.schemas import NutritionSettingsUpsert, WaterAdjustment, WaterAdjustmentResponse, WaterSettingsResponse, WaterSettingsUpsert
-from app.models import HealthProfile, NutritionSettings, User
-from app.schemas import NutritionSettingsUpsert
-
+from app.schemas import (NutritionSettingsUpsert, WaterAdjustment, WaterAdjustmentResponse,
+                         WaterSettingsResponse, WaterSettingsUpsert)
 
 router = APIRouter(tags=["settings"])
 

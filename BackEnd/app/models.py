@@ -1,9 +1,22 @@
 from datetime import UTC, date, datetime
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, JSON, UniqueConstraint, Numeric, String, Text
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    UniqueConstraint,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.core.database import Base
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, UniqueConstraint, Numeric, String
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 
 
 def utc_now() -> datetime:
@@ -35,7 +48,6 @@ class User(Base):
     def has_password(self) -> bool:
         return bool(self.password_hash)
 
-
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
@@ -48,6 +60,7 @@ class RefreshToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
 
 
 class HealthProfile(Base):
@@ -80,7 +93,6 @@ class HealthProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
-
 
 class Food(Base):
     __tablename__ = "foods"
@@ -131,7 +143,6 @@ class FoodLog(Base):
     fat_g: Mapped[float] = mapped_column(Numeric(9, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
-
 class WaterLog(Base):
     __tablename__ = "water_logs"
     __table_args__ = (
@@ -150,7 +161,6 @@ class WaterLog(Base):
         default=utc_now,
     )
 
-
 class ActivityType(Base):
     __tablename__ = "activity_types"
     __table_args__ = (CheckConstraint("met > 0", name="ck_activity_type_met"),)
@@ -159,6 +169,7 @@ class ActivityType(Base):
     name: Mapped[str] = mapped_column(String(120), unique=True)
     met: Mapped[float] = mapped_column(Numeric(5, 2))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
 
 
 class ActivityLog(Base):
@@ -220,6 +231,7 @@ class DiaryEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
 
 
 class SavedMeal(Base):

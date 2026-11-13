@@ -1,21 +1,21 @@
 from app.core.dates import today as business_today
-from datetime import UTC, date, datetime, timedelta
+"""Shared server-enforced administration for Android and React Admin clients."""
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
+
 from app.dependencies import AdminUser, DbSession
-from app.models import AIInteraction, ActivityType, Food, RefreshToken, User
+from app.models import AIInteraction, ActivityLog, ActivityType, DiaryEntry, Food, FoodLog, RefreshToken, User, WaterLog, WeightEntry
+from app.core.config import get_settings
 from app.schemas import AIInteractionResponse, UserResponse
 
-
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-Resource = Literal["users", "foods", "activities"]
-
-
+Resource = Literal["users", "foods", "activities", "ai-logs"]
 MODELS = {"users": User, "foods": Food, "activities": ActivityType, "ai-logs": AIInteraction}
 
 
@@ -56,6 +56,43 @@ def date_range(date_from, date_to):
     if start > end or (end - start).days > 365:
         raise HTTPException(422, "Choose an ordered date range of at most 366 days")
     return start, end
+
+
+@router.get("/analytics")
+def analytics(current_user: AdminUser, db: DbSession,
+              date_from: date | None = None, date_to: date | None = None):
+    start, end = date_range(date_from, date_to)
+    daily = {(start + timedelta(days=i)).isoformat(): {"date": (start + timedelta(days=i)).isoformat(),
+             "new_users": 0, "food_logs": 0, "activity_logs": 0, "water_ml": 0, "ai_requests": 0}
+             for i in range((end - start).days + 1)}
+    active_ids = set()
+    for model, column, label, value in (
+        (FoodLog, FoodLog.log_date, "food_logs", func.count()),
+        (ActivityLog, ActivityLog.log_date, "activity_logs", func.count()),
+        (WaterLog, WaterLog.log_date, "water_ml", func.sum(WaterLog.amount_ml)),
+        (AIInteraction, AIInteraction.context_date, "ai_requests", func.count()),
+    ):
+        for day, total in db.execute(select(column, value).where(column.between(start, end)).group_by(column)):
+            daily[str(day)][label] = int(total)
+        active_ids.update(db.scalars(select(model.user_id).where(column.between(start, end)).distinct()))
+    for model, column in ((WeightEntry, WeightEntry.measured_on), (DiaryEntry, DiaryEntry.entry_date)):
+        active_ids.update(db.scalars(select(model.user_id).where(column.between(start,end)).distinct()))
+    zone = ZoneInfo(get_settings().time_zone)
+    try:
+        lower = datetime.combine(start,time.min,tzinfo=zone).astimezone(UTC)
+        upper = datetime.combine(end,time.max,tzinfo=zone).astimezone(UTC)
+    except (OverflowError, ValueError) as exc:
+        raise HTTPException(422,"Date range is outside the supported timezone range") from exc
+    for created in db.scalars(select(User.created_at).where(User.created_at.between(lower,upper))):
+        instant = created if created.tzinfo is not None else created.replace(tzinfo=UTC)
+        day = instant.astimezone(zone).date().isoformat()
+        daily[day]["new_users"] += 1
+    rows = list(daily.values())
+    totals = {key: sum(row[key] for row in rows) for key in rows[0] if key != "date"}
+    totals.update(total_users=db.scalar(select(func.count()).select_from(User)) or 0,
+                  active_accounts=db.scalar(select(func.count()).select_from(User).where(User.status == "active")) or 0,
+                  active_users=len(active_ids))
+    return {"date_from": start, "date_to": end, "totals": totals, "daily": rows}
 
 
 @router.get("/{resource}")

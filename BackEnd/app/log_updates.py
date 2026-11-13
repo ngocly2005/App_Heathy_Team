@@ -1,17 +1,14 @@
+"""Editable logs preserve the nutrition/MET snapshots recorded originally."""
 from datetime import date
+
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+
 from app.calculations import calculate_activity_calories
 from app.dependencies import CurrentUser, DbSession
 from app.models import ActivityLog, ActivityType, FoodLog, HealthProfile, User, WaterLog
 from app.schemas import ActivityLogCreate, ActivityLogResponse, FoodLogResponse, FoodLogUpdate, WaterLogResponse
-from app.models import ActivityLog, ActivityType, FoodLog, HealthProfile
-from app.schemas import ActivityLogCreate, ActivityLogResponse, FoodLogResponse, FoodLogUpdate
-from fastapi import APIRouter, HTTPException
-from app.models import FoodLog
-from app.schemas import FoodLogResponse, FoodLogUpdate
-
 
 router = APIRouter(tags=["editable logs"])
 
