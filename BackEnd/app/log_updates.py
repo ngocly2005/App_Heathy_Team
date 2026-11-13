@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from app.calculations import calculate_activity_calories
 from app.dependencies import CurrentUser, DbSession
+from app.models import ActivityLog, ActivityType, FoodLog, HealthProfile, User, WaterLog
+from app.schemas import ActivityLogCreate, ActivityLogResponse, FoodLogResponse, FoodLogUpdate, WaterLogResponse
 from app.models import ActivityLog, ActivityType, FoodLog, HealthProfile
 from app.schemas import ActivityLogCreate, ActivityLogResponse, FoodLogResponse, FoodLogUpdate
 from fastapi import APIRouter, HTTPException
@@ -76,3 +78,17 @@ def delete_activity(log_id: int, current_user: CurrentUser, db: DbSession):
     db.delete(owned(db, ActivityLog, log_id, current_user.id))
     db.commit()
     return Response(status_code=204)
+
+
+class WaterUpdate(BaseModel):
+    amount_ml: int = Field(gt=0, le=5000)
+
+
+@router.put("/water-logs/{log_id}", response_model=WaterLogResponse)
+def update_water(log_id: int, payload: WaterUpdate, current_user: CurrentUser, db: DbSession):
+    db.scalar(select(User).where(User.id == current_user.id).with_for_update())
+    row = owned(db, WaterLog, log_id, current_user.id)
+    row.amount_ml = payload.amount_ml
+    db.commit()
+    db.refresh(row)
+    return row

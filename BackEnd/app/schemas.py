@@ -145,7 +145,7 @@ class FoodLogResponse(BaseModel):
 
 class WaterLogCreate(BaseModel):
     amount_ml: int = Field(gt=0, le=5000)
-    log_date: date = Field(default_factory=date.today)
+    log_date: date = Field(default_factory=business_today)
 
 
 class WaterLogResponse(BaseModel):
@@ -305,17 +305,23 @@ class FoodLogUpdate(BaseModel):
     meal_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
-class WaterSettingsResponse(BaseModel):
-    target_ml: int
-    override_target_ml: int | None
-    serving_ml: Literal[200, 500]
-    source: Literal["automatic", "custom"]
+class WaterSettingsUpsert(BaseModel):
+    target_ml: int | None = Field(default=None, ge=500, le=10000)
+    serving_ml: Literal[200, 500] = 200
+
+
+class WaterSettingsResponse(WaterSettingsUpsert):
+    effective_target_ml: int
+
+
+class WaterAdjustment(BaseModel):
+    log_date: date
+    amount_ml: Literal[-500, -200, 200, 500]
 
 
 class WaterAdjustmentResponse(BaseModel):
     date: date
-    water_ml: int
-    applied_amount_ml: int
+    total_ml: int
 
 
 class NutritionSettingsUpsert(BaseModel):

@@ -2,6 +2,8 @@ from fastapi import APIRouter
 from sqlalchemy import select
 from app.calculations import calculate_age, calculate_bmr, calculate_tdee
 from app.dependencies import CurrentUser, DbSession
+from app.models import HealthProfile, NutritionSettings, User, WaterLog, WaterSettings
+from app.schemas import NutritionSettingsUpsert, WaterAdjustment, WaterAdjustmentResponse, WaterSettingsResponse, WaterSettingsUpsert
 from app.models import HealthProfile, NutritionSettings, User
 from app.schemas import NutritionSettingsUpsert
 
@@ -47,3 +49,54 @@ def write_nutrition(payload: NutritionSettingsUpsert, current_user: CurrentUser,
         setattr(row, key, value)
     db.commit()
     return nutrition_response(db, current_user.id)
+
+
+def water_response(db, user_id):
+    row = db.get(WaterSettings, user_id)
+    target = row.target_ml if row else None
+    profile = db.get(HealthProfile, user_id)
+    # Same 35 ml/kg base as the Android calculator; settings are shared across devices.
+    extra = {"moderate": 300, "very_active": 500, "extra_active": 700}
+    automatic = (max(1500, min(4500, round(float(profile.weight_kg) * 35 + extra.get(profile.activity_level, 0))))
+                 if profile else 2000)
+    return WaterSettingsResponse(target_ml=target, serving_ml=row.serving_ml if row else 200,
+                                 effective_target_ml=target if target is not None else automatic)
+
+
+@router.get("/water-settings", response_model=WaterSettingsResponse)
+def read_water(current_user: CurrentUser, db: DbSession):
+    return water_response(db, current_user.id)
+
+
+@router.put("/water-settings", response_model=WaterSettingsResponse)
+def write_water(payload: WaterSettingsUpsert, current_user: CurrentUser, db: DbSession):
+    db.scalar(select(User).where(User.id == current_user.id).with_for_update())
+    row = db.get(WaterSettings, current_user.id)
+    if row is None:
+        row = WaterSettings(user_id=current_user.id)
+        db.add(row)
+    row.target_ml, row.serving_ml = payload.target_ml, payload.serving_ml
+    db.commit()
+    return water_response(db, current_user.id)
+
+
+@router.post("/water-logs/adjust", response_model=WaterAdjustmentResponse)
+def adjust_water(payload: WaterAdjustment, current_user: CurrentUser, db: DbSession):
+    db.scalar(select(User).where(User.id == current_user.id).with_for_update())
+    logs = list(db.scalars(select(WaterLog).where(WaterLog.user_id == current_user.id,
+                       WaterLog.log_date == payload.log_date).order_by(WaterLog.id.desc())))
+    total = sum(row.amount_ml for row in logs)
+    if payload.amount_ml > 0:
+        db.add(WaterLog(user_id=current_user.id, log_date=payload.log_date, amount_ml=payload.amount_ml))
+    else:
+        remaining = min(-payload.amount_ml, total)
+        for row in logs:
+            amount = min(remaining, row.amount_ml)
+            row.amount_ml -= amount
+            remaining -= amount
+            if row.amount_ml == 0:
+                db.delete(row)
+            if remaining == 0:
+                break
+    db.commit()
+    return WaterAdjustmentResponse(date=payload.log_date, total_ml=max(0, total + payload.amount_ml))

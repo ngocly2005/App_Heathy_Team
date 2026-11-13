@@ -140,10 +140,15 @@ class WaterLog(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
     log_date: Mapped[date] = mapped_column(Date)
     amount_ml: Mapped[int] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+    )
 
 
 class ActivityType(Base):
@@ -242,23 +247,12 @@ class SavedMealItem(Base):
 class WaterSettings(Base):
     __tablename__ = "water_settings"
     __table_args__ = (
-        CheckConstraint(
-            "target_ml IS NULL OR target_ml BETWEEN 1000 AND 4500",
-            name="ck_water_settings_target",
-        ),
+        CheckConstraint("target_ml IS NULL OR (target_ml >= 500 AND target_ml <= 10000)", name="ck_water_settings_target"),
         CheckConstraint("serving_ml IN (200, 500)", name="ck_water_settings_serving"),
     )
-
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
-    )
-    # NULL follows the automatic target whenever the health profile changes.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     target_ml: Mapped[int | None] = mapped_column(Integer)
     serving_ml: Mapped[int] = mapped_column(Integer, default=200, server_default="200")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, onupdate=utc_now
-    )
 
 
 class NutritionSettings(Base):
