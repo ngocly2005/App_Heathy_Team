@@ -1,7 +1,9 @@
 from app.core.dates import today as business_today
 from datetime import date, datetime
-from typing import Literal
+from datetime import date as DateValue
+from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator, model_validator
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -44,6 +46,24 @@ class PasswordUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     current_password: SecretStr | None = Field(default=None, min_length=1, max_length=128)
     new_password: SecretStr = Field(min_length=8, max_length=128)
+
+
+class MealChatRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    question: str = Field(min_length=2, max_length=1000)
+    date: DateValue = Field(default_factory=business_today)
+
+
+class MealChatResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answer: str = Field(description="The assistant's complete response or introduction to the detailed meals below.")
+    suggestions: list[str] = Field(description="Full meal suggestions, including portions and estimated nutrition. These are part of the assistant message, not prompts to send.")
+    disclaimer: str
+    follow_up_questions: list[Annotated[str, Field(min_length=2, max_length=120)]] = Field(
+        default_factory=list, max_length=4,
+        description="Short follow-up questions the user may choose to ask next; never meal descriptions.")
 
 
 class GoogleLoginRequest(BaseModel):
