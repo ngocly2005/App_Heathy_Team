@@ -1,22 +1,22 @@
 from app.core.dates import today as business_today
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from app.dependencies import AdminUser, DbSession
-from app.models import AIInteraction, RefreshToken, User
+from app.models import AIInteraction, ActivityType, Food, RefreshToken, User
 from app.schemas import AIInteractionResponse, UserResponse
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-Resource = Literal["users"]
+Resource = Literal["users", "foods", "activities"]
 
 
-MODELS = {"users": User}
+MODELS = {"users": User, "foods": Food, "activities": ActivityType, "ai-logs": AIInteraction}
 
 
 class FoodInput(BaseModel):
@@ -122,8 +122,18 @@ def commit(db):
         raise HTTPException(409, "A record with this name already exists") from exc
 
 
+@router.post("/{resource}", status_code=201)
+def create_resource(resource: Literal["foods", "activities"], payload: dict,
+                    current_user: AdminUser, db: DbSession):
+    row = MODELS[resource](**validate(resource, payload))
+    db.add(row)
+    commit(db)
+    db.refresh(row)
+    return serialize(resource, row)
+
+
 @router.put("/{resource}/{item_id}")
-def update_resource(resource: Literal["users"], item_id: int,
+def update_resource(resource: Literal["users", "foods", "activities"], item_id: int,
                     payload: dict, current_user: AdminUser, db: DbSession):
     row = db.scalar(select(MODELS[resource]).where(MODELS[resource].id == item_id).with_for_update())
     if row is None:
@@ -139,3 +149,14 @@ def update_resource(resource: Literal["users"], item_id: int,
     commit(db)
     db.refresh(row)
     return serialize(resource, row)
+
+
+@router.delete("/{resource}/{item_id}", status_code=204)
+def deactivate_resource(resource: Literal["foods", "activities"], item_id: int,
+                        current_user: AdminUser, db: DbSession):
+    row = db.get(MODELS[resource], item_id)
+    if row is None:
+        raise HTTPException(404, "Record not found")
+    row.is_active = False
+    db.commit()
+    return Response(status_code=204)
