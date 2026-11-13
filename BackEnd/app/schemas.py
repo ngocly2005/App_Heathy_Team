@@ -119,9 +119,10 @@ class FoodResponse(BaseModel):
 
 class FoodLogCreate(BaseModel):
     food_id: int
-    grams: float = Field(gt=0, le=10000)
+    grams: float = Field(ge=0.01, le=10000)
     meal_type: MealType
-    log_date: date = Field(default_factory=date.today)
+    log_date: date = Field(default_factory=business_today)
+    meal_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class FoodLogResponse(BaseModel):
@@ -294,6 +295,13 @@ class PhotoConfirmRequest(BaseModel):
 
 class PhotoConfirmResponse(BaseModel):
     created_logs: list[FoodLogResponse]
+
+
+class FoodLogUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, str_strip_whitespace=True)
+    grams: float = Field(ge=0.01, le=10000)
+    meal_type: MealType
+    meal_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class WaterSettingsResponse(BaseModel):

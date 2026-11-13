@@ -60,6 +60,7 @@ def create_food_log(
         food_id=food.id,
         log_date=payload.log_date,
         meal_type=payload.meal_type,
+        meal_time=payload.meal_time,
         grams=grams,
         food_name=food.name,
         calories_kcal=scale_nutrition(float(food.calories_per_100g), grams),
@@ -79,7 +80,7 @@ def list_food_logs(
     db: DbSession,
     log_date: date | None = Query(default=None, alias="date"),
 ) -> list[FoodLog]:
-    selected_date = log_date or date.today()
+    selected_date = log_date or business_today()
     return list(
         db.scalars(
             select(FoodLog)
