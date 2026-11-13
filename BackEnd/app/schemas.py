@@ -227,6 +227,27 @@ class DailyDashboardResponse(BaseModel):
     activity_logs: list[ActivityLogResponse]
 
 
+HistoryStatus = Literal[
+    "under",
+    "on_target",
+    "over",
+    "no_target",
+    "logged",
+    "no_data",
+]
+
+
+class HistoryDayResponse(BaseModel):
+    date: date
+    calories_consumed: float
+    calories_burned: float
+    water_ml: int
+    calorie_target: float | None
+    weight_kg: float | None
+    has_diary: bool
+    status: HistoryStatus
+
+
 class WeightEntryUpsert(BaseModel):
     weight_kg: float = Field(gt=20, le=400)
 

@@ -1,15 +1,45 @@
 from app.core.dates import today as business_today
+import calendar
 from datetime import date
+
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
-from app.calculations import calculate_macro_percentages, scale_nutrition
-from app.dependencies import CurrentUser, DbSession
-from app.models import ActivityLog, ActivityType, Food, FoodLog, User, WaterLog
-from app.schemas import ActivityLogResponse, ActivityTypeResponse, DailyDashboardResponse, FoodLogCreate, FoodLogResponse, FoodResponse, MacroSummary, WaterLogCreate, WaterLogResponse
 
+from app.calculations import (
+    calculate_activity_calories,
+    calculate_age,
+    calculate_bmr,
+    calculate_macro_percentages,
+    calculate_tdee,
+    scale_nutrition,
+)
+from app.dependencies import CurrentUser, DbSession
+from app.models import (
+    ActivityLog,
+    ActivityType,
+    DiaryEntry,
+    WeightEntry,
+    Food,
+    FoodLog,
+    HealthProfile,
+    User,
+    WaterLog,
+)
+from app.schemas import (
+    ActivityLogCreate,
+    ActivityLogResponse,
+    ActivityTypeResponse,
+    DailyDashboardResponse,
+    FoodLogCreate,
+    FoodLogResponse,
+    FoodResponse,
+    HistoryDayResponse,
+    MacroSummary,
+    WaterLogCreate,
+    WaterLogResponse,
+)
 
 router = APIRouter(tags=["tracking"])
-
 
 def get_calorie_target(db: DbSession, user_id: int) -> float | None:
     from app.settings import calorie_target
@@ -229,3 +259,104 @@ def daily_dashboard(
             ActivityLogResponse.model_validate(item) for item in activity_logs
         ],
     )
+
+
+@router.get("/history/calendar", response_model=list[HistoryDayResponse])
+def history_calendar(
+    current_user: CurrentUser,
+    db: DbSession,
+    month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+) -> list[HistoryDayResponse]:
+    year, month_number = (int(part) for part in month.split("-"))
+    if year < 1:
+        raise HTTPException(status_code=422, detail="Year must be at least 0001")
+    last_day = calendar.monthrange(year, month_number)[1]
+    date_from = date(year, month_number, 1)
+    date_to = date(year, month_number, last_day)
+
+    food_rows = db.execute(
+        select(FoodLog.log_date, func.sum(FoodLog.calories_kcal))
+        .where(
+            FoodLog.user_id == current_user.id,
+            FoodLog.log_date.between(date_from, date_to),
+        )
+        .group_by(FoodLog.log_date)
+    ).all()
+    activity_rows = db.execute(
+        select(ActivityLog.log_date, func.sum(ActivityLog.calories_burned))
+        .where(
+            ActivityLog.user_id == current_user.id,
+            ActivityLog.log_date.between(date_from, date_to),
+        )
+        .group_by(ActivityLog.log_date)
+    ).all()
+    water_rows = db.execute(
+        select(WaterLog.log_date, func.sum(WaterLog.amount_ml))
+        .where(
+            WaterLog.user_id == current_user.id,
+            WaterLog.log_date.between(date_from, date_to),
+        )
+        .group_by(WaterLog.log_date)
+    ).all()
+    weight_rows = db.execute(
+        select(WeightEntry.measured_on, WeightEntry.weight_kg).where(
+            WeightEntry.user_id == current_user.id,
+            WeightEntry.measured_on.between(date_from, date_to),
+        )
+    ).all()
+    diary_dates = set(
+        db.scalars(
+            select(DiaryEntry.entry_date).where(
+                DiaryEntry.user_id == current_user.id,
+                DiaryEntry.entry_date.between(date_from, date_to),
+            )
+        )
+    )
+
+    food_by_date = {row[0]: float(row[1]) for row in food_rows}
+    activity_by_date = {row[0]: float(row[1]) for row in activity_rows}
+    water_by_date = {row[0]: int(row[1]) for row in water_rows}
+    weight_by_date = {row[0]: float(row[1]) for row in weight_rows}
+    calorie_target = get_calorie_target(db, current_user.id)
+    result: list[HistoryDayResponse] = []
+
+    for day_number in range(1, last_day + 1):
+        day = date(year, month_number, day_number)
+        consumed = round(food_by_date.get(day, 0), 2)
+        burned = round(activity_by_date.get(day, 0), 2)
+        water_ml = water_by_date.get(day, 0)
+        has_calorie_data = day in food_by_date or day in activity_by_date
+        has_data = (
+            has_calorie_data
+            or day in water_by_date
+            or day in weight_by_date
+            or day in diary_dates
+        )
+        net_calories = consumed - burned
+
+        if not has_data:
+            day_status = "no_data"
+        elif not has_calorie_data:
+            day_status = "logged"
+        elif calorie_target is None:
+            day_status = "no_target"
+        elif net_calories > calorie_target:
+            day_status = "over"
+        elif net_calories >= calorie_target * 0.9:
+            day_status = "on_target"
+        else:
+            day_status = "under"
+
+        result.append(
+            HistoryDayResponse(
+                date=day,
+                calories_consumed=consumed,
+                calories_burned=burned,
+                water_ml=water_ml,
+                calorie_target=calorie_target,
+                weight_kg=weight_by_date.get(day),
+                has_diary=day in diary_dates,
+                status=day_status,
+            )
+        )
+    return result
