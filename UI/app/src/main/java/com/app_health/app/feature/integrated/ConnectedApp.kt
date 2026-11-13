@@ -15,9 +15,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.app_health.app.core.network.AppContainer
 import com.app_health.app.core.session.AuthState
 import com.app_health.app.feature.auth.AuthViewModel
+import com.app_health.app.feature.auth.ConnectedSignInScreen
 import com.app_health.app.core.designsystem.components.AppBottomNavigation
 import com.app_health.app.core.designsystem.components.BottomNavRoute
 
@@ -30,79 +33,90 @@ fun ConnectedApp() {
     val authUi by auth.uiState.collectAsState()
     when (val current = session) {
         AuthState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        AuthState.SignedOut -> Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.LocalFireDepartment, null, Modifier.size(76.dp), tint = MaterialTheme.colorScheme.primary)
-            Text("Chào mừng trở lại!", style = MaterialTheme.typography.headlineMedium)
-            Text("Tiếp tục hành trình sức khỏe của bạn", Modifier.padding(vertical = 16.dp))
-            authUi.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(onClick = { auth.signIn(context) }, enabled = !authUi.busy, modifier = Modifier.fillMaxWidth()) {
-                Text(if (authUi.busy) "Đang đăng nhập…" else "Tiếp tục với Google")
-            }
-        }
+        AuthState.SignedOut -> ConnectedSignInScreen(auth)
         is AuthState.SignedIn -> key(current.user.id) {
             val vm: AppViewModel = viewModel(key = "connected-${current.user.id}")
+            // Initial landing follows BE identity; an explicit return to health stays there.
+            var adminOpen by rememberSaveable { mutableStateOf(current.user.role == "admin" && !current.offline) }
+            LaunchedEffect(current.user.role) {
+                if (current.user.role != "admin" && adminOpen) {
+                    adminOpen = false
+                    vm.refresh()
+                }
+            }
             DisposableEffect(vm) { vm.activate(); onDispose { vm.releaseIfSessionChanged() } }
-            ConnectedShell(vm)
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { auth.refreshIdentity() }
+            ConnectedShell(vm, onOpenAdmin = {}, onRefreshIdentity = { auth.refreshIdentity() }, authBusy = authUi.busy)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConnectedShell(vm: AppViewModel) {
-    val features = installedFeatures()
+private fun ConnectedShell(vm: AppViewModel, onOpenAdmin: () -> Unit, onRefreshIdentity: () -> Unit, authBusy: Boolean) {
+    val features = remember { installedFeatures() }
     var route by rememberSaveable { mutableStateOf(features.firstOrNull()?.route ?: "foundation") }
     val state by vm.state.collectAsState()
     val current = features.firstOrNull { it.route == route }
-    BackHandler(enabled = state.busy) { /* Keep a pending write on screen until its result is known. */ }
-    BackHandler(enabled = route != (features.firstOrNull()?.route ?: "foundation") && !state.busy) {
+    val busy = state.busy || authBusy
+    val branded = route in setOf("home", "diary", "meals", "profile")
+    LaunchedEffect(route) {
+        vm.enter(route)
+        if (route == "profile") onRefreshIdentity()
+    }
+    BackHandler(enabled = busy) { /* Keep a pending write on screen until its result is known. */ }
+    BackHandler(enabled = route != (features.firstOrNull()?.route ?: "foundation") && !busy) {
         route = features.firstOrNull()?.route ?: "foundation"
     }
-    Scaffold(topBar = {
-        TopAppBar(title = { Text(current?.title ?: "AppHealth") }, actions = {
-            TextButton(onClick = { vm.refresh() }, enabled = !state.loading && !state.busy) { Text("Tải lại") }
+    Scaffold(containerColor = HealthBackground, topBar = {
+        if (branded) Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { vm.refresh(); onRefreshIdentity() }, enabled = !state.loading && !busy,
+                modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                Text("Tải lại", style = MaterialTheme.typography.labelMedium)
+            }
+        } else TopAppBar(title = { Text(current?.title ?: "AppHealth") }, actions = {
+            TextButton(onClick = { vm.refresh(); onRefreshIdentity() }, enabled = !state.loading && !busy) { Text("Tải lại") }
         })
     }, bottomBar = {
-        if(features.any{it.route=="diary"}) AppBottomNavigation(
+        if(features.any{it.route=="diary"}) AppBottomNavigation(enabled = !busy,
             currentRoute=when(route){"diary"->BottomNavRoute.DIARY;"meals"->BottomNavRoute.PLAN;"profile"->BottomNavRoute.ACCOUNT;else->BottomNavRoute.HOME},
-            onRouteSelected={target ->if(!state.busy)route=when(target){BottomNavRoute.HOME->"home";BottomNavRoute.DIARY->"diary";BottomNavRoute.PLAN->"meals";BottomNavRoute.ACCOUNT->"profile"}},
-            onNavigateToSelectFood={if(!state.busy)route="food"},onNavigateToCaptureFood={if(!state.busy)route="photo"})
+            onRouteSelected={target ->if(!busy)route=when(target){BottomNavRoute.HOME->"home";BottomNavRoute.DIARY->"diary";BottomNavRoute.PLAN->"meals";BottomNavRoute.ACCOUNT->"profile"}},
+            onNavigateToSelectFood={if(!busy)route="food"},onNavigateToCaptureFood={if(!busy)route="photo"})
         else if (features.isNotEmpty()) NavigationBar {
             listOf("home","diary","meals","profile").mapNotNull{key->features.firstOrNull{it.route==key}}.forEach { feature ->
-                NavigationBarItem(selected = route == feature.route, onClick = { if (!state.busy) route = feature.route },
+                NavigationBarItem(selected = route == feature.route, onClick = { if (!busy) route = feature.route },
                     icon = { Text(when(feature.route) { "home" -> "⌂"; "diary" -> "▤"; "meals" -> "♡"; else -> "●" }) },
                     label = { Text(feature.title) })
             }
         }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            if (state.loading || state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            state.error?.let { message ->
+            if (state.loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            state.error?.takeIf { state.route == route || state.uncertain }?.let { message ->
                 Surface(color = MaterialTheme.colorScheme.errorContainer) {
                     Text(message, Modifier.fillMaxWidth().padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
-            current?.screen?.invoke(vm) { target -> if (features.any { it.route == target }) route = target }
-                ?: Text("Phiên Google đã sẵn sàng.", Modifier.padding(24.dp))
+            key(route) {
+                current?.screen?.invoke(vm) { target ->
+                    if (target == "admin" && !busy) onOpenAdmin()
+                    else if (features.any { it.route == target }) route = target
+                }
+                    ?: Text("Phiên Google đã sẵn sàng.", Modifier.padding(24.dp))
+            }
         }
     }
 }
 
 @Composable
 fun Page(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
+    HealthPage(content)
 }
 
 @Composable
 fun Panel(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            content()
-        }
-    }
+    HealthCard(title = title, content = content)
 }
 
 @Composable

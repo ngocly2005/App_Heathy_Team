@@ -13,6 +13,15 @@ import java.io.IOException
 
 private class RequestSession(val userId: Long, val accessToken: String)
 
+/** A refresh POST may already have rotated tokens when local storage subsequently fails. */
+internal inline fun <T> protectRefreshSideEffects(operation: () -> T): T = try {
+    operation()
+} catch (failure: NonReplayableIOException) {
+    throw failure
+} catch (failure: IOException) {
+    throw NonReplayableIOException(failure)
+}
+
 /** Feature repositories attach their owner ID with Retrofit @Tag before suspending. */
 data class SessionRequestTag(val userId: Long)
 
@@ -48,7 +57,10 @@ class SessionAuthenticator(
 ) : Authenticator {
     private val refreshLock = Any()
 
-    override fun authenticate(route: Route?, response: Response): Request? {
+    override fun authenticate(route: Route?, response: Response): Request? =
+        protectRefreshSideEffects { authenticateOnce(response) }
+
+    private fun authenticateOnce(response: Response): Request? {
         if (!response.request.url.sameOrigin(origin)) return null
         val sent = response.request.tag(RequestSession::class.java) ?: return null
         if (response.priorResponse != null) {
@@ -63,7 +75,7 @@ class SessionAuthenticator(
             if (current.accessToken != sent.accessToken) return@synchronized current.accessToken
 
             // This API uses a client with no bearer interceptor or authenticator.
-            // IOException propagates: cached credentials survive temporary transport failure.
+            // The outer guard also protects persistence/clear failures after this POST completes.
             val result = rawAuthApi.refresh(RefreshRequest(current.refreshToken)).execute()
             if (!result.isSuccessful) {
                 result.errorBody()?.close()
