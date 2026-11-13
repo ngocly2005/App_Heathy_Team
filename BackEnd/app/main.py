@@ -11,6 +11,7 @@ from app.weight import router as weight_router
 from app.saved_meals import router as saved_meals_router
 from app.ai import router as ai_router
 from app.log_updates import router as log_updates_router
+from app.admin import router as admin_router
 
 
 settings = get_settings()
@@ -57,6 +58,9 @@ app.include_router(ai_router, prefix=settings.api_v1_prefix)
 
 
 app.include_router(log_updates_router, prefix=settings.api_v1_prefix)
+
+
+app.include_router(admin_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["system"])
