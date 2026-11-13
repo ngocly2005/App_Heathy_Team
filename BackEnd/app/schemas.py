@@ -221,8 +221,20 @@ class WeightEntryResponse(BaseModel):
 
 
 class SavedMealItemCreate(BaseModel):
-    food_id: int
-    grams: float = Field(gt=0, le=10000)
+    model_config = ConfigDict(allow_inf_nan=False, str_strip_whitespace=True)
+    food_id: int | None = Field(default=None, gt=0)
+    grams: float = Field(ge=0.01, le=10000)
+    food_name: str | None = Field(default=None, min_length=1, max_length=160)
+    calories_per_100g: float | None = Field(default=None, ge=0, le=20000)
+    protein_per_100g: float = Field(default=0, ge=0, le=2000)
+    carb_per_100g: float = Field(default=0, ge=0, le=3000)
+    fat_per_100g: float = Field(default=0, ge=0, le=2000)
+
+    @model_validator(mode="after")
+    def snapshot_or_catalog(self):
+        if self.food_id is None and (not self.food_name or self.calories_per_100g is None):
+            raise ValueError("Provide food_id or food_name and nutrition snapshot")
+        return self
 
 
 class SavedMealCreate(BaseModel):
@@ -262,7 +274,8 @@ class SavedMealResponse(BaseModel):
 
 class SavedMealLogRequest(BaseModel):
     meal_type: MealType
-    log_date: date = Field(default_factory=date.today)
+    log_date: date = Field(default_factory=business_today)
+    meal_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class PhotoFoodItem(BaseModel):
