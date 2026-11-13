@@ -1,0 +1,126 @@
+{
+  "scope": "UI presentation only; no API, calculation or BE migration changes",
+  "source_head": "e6305b2581d97c8964626223188c3308a908599e",
+  "source_base": "25f38c8aff97f9985dbcf4672f9da45bdec65019",
+  "team_base": "6a4372ecf1f750021974d2333b3d44a788194f97",
+  "protected_trees": {
+    "BackEnd": "021cd22b1d22a7683fb4029536dba1e7b101c74f",
+    "FrontEnd": "8d6b313d6a39f1353a55c9205d4ef0c303c0138f"
+  },
+  "tasks": [
+    {
+      "id": "S1-BL02-FE",
+      "description": "align authentication and shared UI with Figma exports",
+      "sha": "2130e98fb798316c4ed4f858abbf58aa056721da",
+      "parent": "6a4372ecf1f750021974d2333b3d44a788194f97",
+      "paths": [
+        "UI/app/src/main/java/com/app_health/app/feature/auth/ConnectedSignInScreen.kt",
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/FigmaUi.kt",
+        "UI/app/src/main/java/com/app_health/app/core/designsystem/components/AppBottomNavigation.kt",
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/ConnectedApp.kt"
+      ],
+      "snapshot": "snapshots/S1-BL02-FE",
+      "files": 206,
+      "patch": "patches/S1-BL02-FE.patch",
+      "patch_sha256": "2d974987f7ebb4397225bf607a1942a34bb57f81e552abf1e3ae6c9ffb1d1c7d",
+      "identity": "ngocly2005 <ngoclykt0705@gmail.com>\nngocly2005 <ngoclykt0705@gmail.com>",
+      "date": "2026-11-13T17:02:40+07:00"
+    },
+    {
+      "id": "S2-BL26-FE",
+      "description": "restyle nutrition targets and saved goal summary",
+      "sha": "2e272fd7c22b44e659f13a91cb868f6c9335bd42",
+      "parent": "2130e98fb798316c4ed4f858abbf58aa056721da",
+      "paths": [
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/MacroFeature.kt"
+      ],
+      "snapshot": "snapshots/S2-BL26-FE",
+      "files": 206,
+      "patch": "patches/S2-BL26-FE.patch",
+      "patch_sha256": "0e354a98f4382d26b31e72477f09147e981571fde92a1762ee19ab4181b04acf",
+      "identity": "ngocly2005 <ngoclykt0705@gmail.com>\nngocly2005 <ngoclykt0705@gmail.com>",
+      "date": "2026-11-13T17:02:45+07:00"
+    },
+    {
+      "id": "S1-BL06-FE",
+      "description": "restyle profile and physical information forms",
+      "sha": "e2ed1848705ec4a790b6826d53700ef23bca7b55",
+      "parent": "2e272fd7c22b44e659f13a91cb868f6c9335bd42",
+      "paths": [
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/ProfileFeature.kt"
+      ],
+      "snapshot": "snapshots/S1-BL06-FE",
+      "files": 206,
+      "patch": "patches/S1-BL06-FE.patch",
+      "patch_sha256": "561faa47f6fee46d8f71959988a7b6b584cbe06ade488dd3a53d9a414378b606",
+      "identity": "ngocly2005 <ngoclykt0705@gmail.com>\nngocly2005 <ngoclykt0705@gmail.com>",
+      "date": "2026-11-13T17:02:49+07:00"
+    },
+    {
+      "id": "S1-BL10-FE",
+      "description": "restyle daily calorie overview and widgets",
+      "sha": "fd6a935b5427c73f3605de575c133e158f04a7ca",
+      "parent": "e2ed1848705ec4a790b6826d53700ef23bca7b55",
+      "paths": [
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/HomeFeature.kt"
+      ],
+      "snapshot": "snapshots/S1-BL10-FE",
+      "files": 206,
+      "patch": "patches/S1-BL10-FE.patch",
+      "patch_sha256": "47d429432017157fec53f6103ae9a795ddbfcc76f6aaa155ee0887f70e4fb360",
+      "identity": "ngocly2005 <ngoclykt0705@gmail.com>\nngocly2005 <ngoclykt0705@gmail.com>",
+      "date": "2026-11-13T17:02:54+07:00"
+    },
+    {
+      "id": "S1-BL18-FE",
+      "description": "restyle food search and add-meal choices",
+      "sha": "57690bf5d3fdc2f2fb78bb6bc9b07daaa1ffe496",
+      "parent": "fd6a935b5427c73f3605de575c133e158f04a7ca",
+      "paths": [
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/FoodFeature.kt",
+        "UI/app/src/main/java/com/app_health/app/feature/home/components/AddCameraFood/AddFoodBottomSheet.kt"
+      ],
+      "snapshot": "snapshots/S1-BL18-FE",
+      "files": 206,
+      "patch": "patches/S1-BL18-FE.patch",
+      "patch_sha256": "bdac5942ffeaa0dd5518c25f06b2e26c949fcd5c13e4fbc71d7f0c0a6bea4095",
+      "identity": "ngocly2005 <ngoclykt0705@gmail.com>\nngocly2005 <ngoclykt0705@gmail.com>",
+      "date": "2026-11-13T17:02:58+07:00"
+    },
+    {
+      "id": "S2-BL30-FE",
+      "description": "restyle exercise catalog and duration form",
+      "sha": "df4731c65443e70070133ccb981c9eea4296d12a",
+      "parent": "57690bf5d3fdc2f2fb78bb6bc9b07daaa1ffe496",
+      "paths": [
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/ActivityFeature.kt"
+      ],
+      "snapshot": "snapshots/S2-BL30-FE",
+      "files": 206,
+      "patch": "patches/S2-BL30-FE.patch",
+      "patch_sha256": "3413d44a8f1bb2d306e2070a27ff285b92b4788aa1d757e441a110dc1ba9996a",
+      "identity": "ngocly2005 <ngoclykt0705@gmail.com>\nngocly2005 <ngoclykt0705@gmail.com>",
+      "date": "2026-11-13T17:03:03+07:00"
+    },
+    {
+      "id": "S3-BL54-FE",
+      "description": "restyle diary and group meals by recorded hour",
+      "sha": "caf13e04d9ed58c727ed7f279851af09a75fc66d",
+      "parent": "df4731c65443e70070133ccb981c9eea4296d12a",
+      "paths": [
+        "UI/app/src/main/java/com/app_health/app/feature/integrated/DiaryFeature.kt"
+      ],
+      "snapshot": "snapshots/S3-BL54-FE",
+      "files": 206,
+      "patch": "patches/S3-BL54-FE.patch",
+      "patch_sha256": "e775c9b79779a070c32f870fd40212fddd681d318e8fb90d1350a3df8c6d0383",
+      "identity": "ngocly2005 <ngoclykt0705@gmail.com>\nngocly2005 <ngoclykt0705@gmail.com>",
+      "date": "2026-11-13T17:03:07+07:00"
+    }
+  ],
+  "identity": "ngocly2005 <ngoclykt0705@gmail.com>",
+  "git_dates_modified": false,
+  "codex_assisted": true,
+  "checkpoint_validation": "Final Android source compiled/tested/linted; intermediate file dependencies reviewed, not individually built.",
+  "ordering": "Macro helper must precede Profile; task order follows dependencies, not sprint dates."
+}
