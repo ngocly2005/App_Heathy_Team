@@ -1,0 +1,62 @@
+{
+  "source_head": "73ca2081990f30808945a802edaecd96f0b690f5",
+  "source_base": "e6305b2581d97c8964626223188c3308a908599e",
+  "team_base": "eea7c5d9825742f291ebcf126ee8f0cc3031fccf",
+  "protected_trees": {
+    "BackEnd": "021cd22b1d22a7683fb4029536dba1e7b101c74f",
+    "FrontEnd": "8d6b313d6a39f1353a55c9205d4ef0c303c0138f"
+  },
+  "tasks": [
+    {
+      "id": "S1-BL22-FE",
+      "description": "restyle Admin shell, sign-in and user management",
+      "sha": "bbeeb307f288cbbf414469c677dcb0a3013a9c8f",
+      "parent": "eea7c5d9825742f291ebcf126ee8f0cc3031fccf",
+      "paths": [
+        "UI/admin-web/index.html",
+        "UI/admin-web/src/App.tsx",
+        "UI/admin-web/src/Login.tsx",
+        "UI/admin-web/src/Users.tsx",
+        "UI/admin-web/src/AdminLayout.tsx",
+        "UI/admin-web/src/AdminUi.tsx",
+        "UI/admin-web/src/theme.ts",
+        "UI/admin-web/src/uiTranslations.ts"
+      ],
+      "snapshot": "snapshots/S1-BL22-FE",
+      "patch": "patches/S1-BL22-FE.patch",
+      "patch_sha256": "433e2fcc9a3ea857bd612c3a07215976b4a9e8fb55f395f3ab7d524b46e2635c",
+      "files": 211
+    },
+    {
+      "id": "S2-BL46-FE",
+      "description": "restyle food and exercise catalog management",
+      "sha": "cbd76b6049bb97695d85869a250fed63f159a2e9",
+      "parent": "bbeeb307f288cbbf414469c677dcb0a3013a9c8f",
+      "paths": [
+        "UI/admin-web/src/Catalog.tsx"
+      ],
+      "snapshot": "snapshots/S2-BL46-FE",
+      "patch": "patches/S2-BL46-FE.patch",
+      "patch_sha256": "501f1b2988a9ebc3fa533d48e8fe38d5ffb7d86e1c048be6225f9d4063ff391d",
+      "files": 211
+    },
+    {
+      "id": "S3-BL62-FE",
+      "description": "restyle analytics and AI history",
+      "sha": "af5ff6a908ee8a968e28f23b87230e3bfd44132b",
+      "parent": "cbd76b6049bb97695d85869a250fed63f159a2e9",
+      "paths": [
+        "UI/admin-web/src/Analytics.tsx",
+        "UI/admin-web/src/AILogs.tsx"
+      ],
+      "snapshot": "snapshots/S3-BL62-FE",
+      "patch": "patches/S3-BL62-FE.patch",
+      "patch_sha256": "3be52856a87bc4ae9f6595590b5cff931d25fd13beb972518d084645e46c5705",
+      "files": 211
+    }
+  ],
+  "scope": "Admin web UI only; Android/BE/API unchanged",
+  "git_dates_modified": false,
+  "codex_assisted": true,
+  "identity": "ngocly2005 <ngoclykt0705@gmail.com>"
+}
